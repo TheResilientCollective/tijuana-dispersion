@@ -1,17 +1,43 @@
+# Python bytecode and caches
 __pycache__
 *.pyc
 *.pyo
 *.egg-info
 .cache
 .pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Test/demo artifacts that shouldn't end up in the image
 demo_output
 *.csv
 *.png
+
+# JSON: only allow railway.json (used by Railway build config)
 *.json
 !railway.json
+
+# Environment + venv
 .env
 .venv
 venv
+
+# Version control + GH metadata
 .git
 .gitignore
-*.md
+.github
+
+# Editor/OS
+.DS_Store
+.vscode
+.idea
+
+# Docs + experiments + tests aren't needed at runtime.
+# README.md is allowed because hatchling reads it during the build's
+# `uv sync` step for package metadata.
+docs
+tests
+scripts
+CHANGELOG.md
+Makefile
+AGENTS.md

@@ -54,7 +54,7 @@ from .service import run_forward, run_inversion
 
 __version__ = "0.3.0"
 # Grouped by submodule for readability; intentional ordering.
-__all__ = [
+__all__ = [  # noqa: RUF022
     # core
     "Source",
     "Receptor",

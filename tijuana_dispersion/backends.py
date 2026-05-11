@@ -191,7 +191,7 @@ class RemoteHTTPBackend(Backend):
         # httpx is optional; import lazily so the rest of the package still
         # imports when httpx isn't installed.
         try:
-            import httpx
+            import httpx  # noqa: PLC0415
         except ImportError as e:
             raise RuntimeError("RemoteHTTPBackend requires httpx. pip install httpx") from e
 

@@ -19,6 +19,7 @@ from tijuana_dispersion import (
     Receptor,
     Source,
     forward_run,
+    forward_run_per_source,
     gaussian_plume_concentration,
     pasquill_stability,
     ugm3_to_ppb_h2s,
@@ -286,8 +287,6 @@ def test_forward_run_per_source_separates_contributions(
     calm_night_met: MetCondition,
 ) -> None:
     """Per-source array should sum across the source axis to forward_run."""
-    from tijuana_dispersion import forward_run_per_source
-
     src_a = Source(name="a", lat=32.54064, lon=-117.05801, emission_rate_g_s=1.0, archetype="drain")
     src_b = Source(name="b", lat=32.54300, lon=-117.06000, emission_rate_g_s=2.0, archetype="drain")
     per_source = forward_run_per_source(

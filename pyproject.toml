@@ -77,6 +77,11 @@ ignore = [
     "RUF012",              # mutable class attribute defaults
 ]
 
+# Keep `# noqa: <CODE>` comments even when an older ruff version thinks the
+# rule isn't active. Without this, pre-commit's pinned ruff strips noqas
+# that newer ruff in CI then needs.
+unfixable = ["RUF100"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*" = ["PLR2004", "S101", "T20", "N802"]   # N802: physics-class test names
 "scripts/**/*" = ["T20", "N802"]                    # N802: ast.NodeVisitor required-name methods

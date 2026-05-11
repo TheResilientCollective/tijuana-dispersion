@@ -57,7 +57,7 @@ def main() -> int:
 
     if not args.coverage_xml.exists():
         print(
-            f"error: {args.coverage_xml} not found; " f"did pytest run with --cov-report=xml?",
+            f"error: {args.coverage_xml} not found; did pytest run with --cov-report=xml?",
             file=sys.stderr,
         )
         return 2

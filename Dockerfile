@@ -7,21 +7,23 @@
 
 FROM python:3.12-slim AS builder
 
-# Install uv (fast Python package manager) and build deps for native wheels
+# Native-wheel build deps (numpy, scipy if no manylinux wheels available)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 
-WORKDIR /build
+# Build at the same path that the runtime stage will use so the venv's
+# script shebangs (e.g. `#!/app/.venv/bin/python3.12`) resolve after the
+# stage copy. uv venvs are not relocatable by default.
+WORKDIR /app
 
-# Install dependencies in a separate layer for better caching.
-# --no-install-project: install deps only, not the local package itself.
+# Install deps in one layer (cached on dep changes only)
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --no-editable
 
-# Now install the package itself
+# Then install the project itself
 COPY tijuana_dispersion ./tijuana_dispersion
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
@@ -29,27 +31,28 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---- runtime stage ----
 FROM python:3.12-slim
 
-# Just runtime essentials
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull the venv from the builder — already includes the package and its deps
-COPY --from=builder /build/.venv /app/.venv
-ENV PATH=/app/.venv/bin:$PATH
-
 WORKDIR /app
 
-# Cache directory for dispersion results (mounted volume on Railway)
+# Bring over the venv from the builder. Same path → shebangs still resolve.
+COPY --from=builder /app/.venv /app/.venv
+# Bring over the project code too — pyproject + uv.lock are not needed at
+# runtime, but the package itself is imported by uvicorn.
+COPY --from=builder /app/tijuana_dispersion /app/tijuana_dispersion
+
+# Cache directory for dispersion results (mount a Railway volume here in prod)
 RUN mkdir -p /app/.cache
 
-ENV PYTHONUNBUFFERED=1 \
+ENV PATH=/app/.venv/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
     DISPERSION_CACHE_DIR=/app/.cache \
     PORT=8765
 
 EXPOSE 8765
 
-# Healthcheck for Railway's liveness probes
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 

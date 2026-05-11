@@ -1,0 +1,142 @@
+[project]
+name = "tijuana-dispersion"
+version = "0.3.0"
+description = "Atmospheric H2S dispersion modeling service for the Tijuana River Valley."
+readme = "README.md"
+requires-python = "==3.12.*"
+license = { text = "MIT" }
+authors = [
+    { name = "The Resilient Collective" },
+]
+dependencies = [
+    "fastapi>=0.110,<0.120",
+    "uvicorn[standard]>=0.27,<0.35",
+    "pydantic>=2.6,<3.0",
+    "numpy>=1.26,<3.0",
+    "scipy>=1.12,<2.0",
+    "httpx>=0.27,<1.0",
+    "pyarrow>=15.0,<20.0",
+    "pandas>=2.2,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-cov>=5.0,<7.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "mypy>=1.10,<2.0",
+    "ruff>=0.6,<1.0",
+    "pre-commit>=3.7,<5.0",
+    "detect-secrets>=1.5,<2.0",
+    "types-pyyaml",
+]
+
+[project.urls]
+Repository = "https://github.com/theresilientcollective/tijuana-dispersion"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tijuana_dispersion"]
+
+# ---------- ruff ----------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".cache", "dist", "build"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",         # pycodestyle / pyflakes
+    "I",                   # isort
+    "N",                   # pep8-naming
+    "UP",                  # pyupgrade
+    "B",                   # bugbear
+    "C4",                  # comprehensions
+    "SIM",                 # simplify
+    "RET",                 # return
+    "T20",                 # no print
+    "PTH",                 # pathlib over os.path
+    "PT",                  # pytest style
+    "PL",                  # pylint subset
+    "RUF",                 # ruff-specific
+]
+ignore = [
+    "PLR0913",             # too many arguments — happens with scientific signatures
+    "PLR2004",             # magic numbers — common in physics
+    "PLR0915",             # too many statements
+    "PLR0912",             # too many branches
+    "PLR0911",             # too many returns — Pasquill stability lookup table
+    "N803",                # arg lowercase — physics symbols (Q, T) violate this
+    "N806",                # var lowercase — same reason
+    "RUF001",              # ambiguous unicode — σ, × are intentional physics notation
+    "RUF002",              # ambiguous unicode in docstrings — same
+    "RUF003",              # ambiguous unicode in comments — same
+    "RUF012",              # mutable class attribute defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = ["PLR2004", "S101", "T20", "N802"]   # N802: physics-class test names
+"scripts/**/*" = ["T20", "N802"]                    # N802: ast.NodeVisitor required-name methods
+"tijuana_dispersion/api.py" = ["B008"]              # FastAPI uses Depends() in defaults
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------- mypy ----------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_reexport = true
+ignore_missing_imports = false
+
+[[tool.mypy.overrides]]
+module = "scipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false  # test fixtures often skip return types
+
+# ---------- pytest ----------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "slow: tests that take more than 1 second",
+    "integration: tests that hit external services",
+]
+
+# ---------- coverage ----------
+[tool.coverage.run]
+source = ["tijuana_dispersion"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+# AGENTS.md scopes the 80% floor to core.py and schemas.py — CI enforces that
+# per-module. The global threshold here is a soft floor; per-module is the
+# load-bearing check.
+fail_under = 40
+show_missing = true
+
+[tool.coverage.paths]
+source = ["tijuana_dispersion", "*/tijuana_dispersion"]
+
+[dependency-groups]
+dev = [
+    "pandas-stubs>=3.0.0.260204",
+]

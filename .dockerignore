@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.cache
+.pytest_cache
+demo_output
+*.csv
+*.png
+*.json
+!railway.json
+.env
+.venv
+venv
+.git
+.gitignore
+*.md

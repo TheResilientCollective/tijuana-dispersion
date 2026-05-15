@@ -40,6 +40,7 @@ from .emissions import (
     f_volatilization,
     make_emissions_model_with_overrides,
 )
+from .regime import DEFAULT_U_CALM_MS, is_stagnation
 from .schemas import (
     SCHEMA_VERSION,
     ForwardRunRequest,
@@ -75,6 +76,9 @@ __all__ = [  # noqa: RUF022
     # service
     "run_forward",
     "run_inversion",
+    # regime (stagnation guardrail)
+    "is_stagnation",
+    "DEFAULT_U_CALM_MS",
     # calibration
     "distributed_channel_sources",
     "distributed_area_sources",

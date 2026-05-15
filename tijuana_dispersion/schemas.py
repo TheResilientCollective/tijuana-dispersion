@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
 
 
 class SourceSpec(BaseModel):
@@ -71,6 +71,15 @@ class ForwardRunResult(BaseModel):
     summary: dict[str, Any] = Field(default_factory=dict)
     cached: bool = False
     runtime_ms: int = 0
+    # --- stagnation guardrail (schema 0.2.0; additive, backward-compatible) ---
+    # Per-timestep flag: True where the hour is calm-nocturnal stagnation,
+    # a regime in which the Gaussian-plume backends have ~no skill. Callers
+    # should treat flagged timesteps as out-of-envelope, not as confident
+    # low concentrations. Defaults to empty so pre-0.2.0 cached payloads
+    # still parse.
+    stagnation_flags: list[bool] = Field(default_factory=list)
+    # Convenience: True if any timestep is stagnation.
+    out_of_envelope: bool = False
 
 
 class InversionRequest(BaseModel):

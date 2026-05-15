@@ -26,6 +26,7 @@ from .core import (
     forward_run,
     forward_run_per_source,
 )
+from .regime import is_stagnation
 from .schemas import (
     ForwardRunRequest,
     ForwardRunResult,
@@ -114,10 +115,19 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
         arr = forward_run(sources, receptors, met, units=req.units)
     runtime_ms = int((time.time() - t0) * 1000)
 
+    # Stagnation guardrail (issue #2): flag calm-nocturnal hours where the
+    # plume model is out of its envelope rather than presenting a
+    # confident low concentration.
+    stagnation_flags = [is_stagnation(m) for m in met]
+    n_stagnation = sum(stagnation_flags)
+    out_of_envelope = n_stagnation > 0
+
     summary = {
         "max_concentration": float(np.max(arr)),
         "mean_concentration": float(np.mean(arr)),
         "n_nonzero": int(np.sum(arr > 0.001)),
+        "n_stagnation_hours": n_stagnation,
+        "regime": "stagnation" if out_of_envelope else "advective",
     }
 
     result = ForwardRunResult(
@@ -131,6 +141,8 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
         concentrations=arr.tolist(),
         summary=summary,
         runtime_ms=runtime_ms,
+        stagnation_flags=stagnation_flags,
+        out_of_envelope=out_of_envelope,
     )
     cache_path.write_text(result.model_dump_json())
     return result

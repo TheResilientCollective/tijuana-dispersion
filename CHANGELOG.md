@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file. Format foll
 ## [Unreleased]
 
 ### Added
+- Lagrangian puff backend (issue #1): `LagrangianPuffBackend` in
+  `backends.py` is now a working pure-Python (numpy) Gaussian puff
+  model (replaces the `NotImplementedError` stub). Mass-conserving
+  sub-puff release per source, wind advection, Briggs σ growth with
+  travelled path, summed 3-D puff kernel with ground reflection,
+  out-of-domain pruning. Steady wind → agrees with the Gaussian
+  plume within 10% > 200 m downwind; cold-start/step changes show
+  the correct delayed-then-rising transient. `info` →
+  `name="puff", version="0.1.0"`. No schema/contract change. New
+  module 100% covered; `mypy --strict` clean.
 - Stagnation guardrail (issue #2): new `regime` module with
   `is_stagnation()` classifier (calm-nocturnal regime where the
   Gaussian-plume backends have no skill). `run_forward` now flags

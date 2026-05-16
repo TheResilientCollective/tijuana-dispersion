@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import nnls
 
+from .backends import StagnationBoxBackend
 from .core import (
     MetCondition,
     Receptor,
@@ -108,13 +109,6 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
     receptors = _to_core_receptors(req.receptors)
     met = _to_core_met(req.meteorology)
 
-    t0 = time.time()
-    if req.return_per_source:
-        arr = forward_run_per_source(sources, receptors, met, units=req.units)
-    else:
-        arr = forward_run(sources, receptors, met, units=req.units)
-    runtime_ms = int((time.time() - t0) * 1000)
-
     # Stagnation guardrail (issue #2): flag calm-nocturnal hours where the
     # plume model is out of its envelope rather than presenting a
     # confident low concentration.
@@ -122,12 +116,43 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
     n_stagnation = sum(stagnation_flags)
     out_of_envelope = n_stagnation > 0
 
+    t0 = time.time()
+    if req.backend == "stagnation_box":
+        # Explicitly force the accumulation box for every hour.
+        box = StagnationBoxBackend()
+        if req.return_per_source:
+            arr = box.run_forward_per_source(sources, receptors, met, units=req.units)
+        else:
+            arr = box.run_forward(sources, receptors, met, units=req.units)
+        dispatch = "forced_box"
+    elif req.return_per_source:
+        arr = forward_run_per_source(sources, receptors, met, units=req.units)
+        dispatch = "disabled" if req.disable_regime_dispatch else "regime"
+    else:
+        arr = forward_run(sources, receptors, met, units=req.units)
+        if req.disable_regime_dispatch:
+            dispatch = "disabled"
+        else:
+            # Regime dispatch (issue #3): on stagnation timesteps the
+            # Gaussian plume has ~no skill, so overlay the accumulation
+            # box on exactly those hours; advective hours stay Gaussian.
+            dispatch = "regime"
+            if out_of_envelope:
+                box_arr = StagnationBoxBackend().run_forward(
+                    sources, receptors, met, units=req.units
+                )
+                for t_idx, flagged in enumerate(stagnation_flags):
+                    if flagged:
+                        arr[t_idx, :] = box_arr[t_idx, :]
+    runtime_ms = int((time.time() - t0) * 1000)
+
     summary = {
         "max_concentration": float(np.max(arr)),
         "mean_concentration": float(np.mean(arr)),
         "n_nonzero": int(np.sum(arr > 0.001)),
         "n_stagnation_hours": n_stagnation,
         "regime": "stagnation" if out_of_envelope else "advective",
+        "dispatch": dispatch,
     }
 
     result = ForwardRunResult(

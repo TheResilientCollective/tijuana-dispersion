@@ -27,7 +27,8 @@ The service is designed to dispatch forward-modeling requests to one of several 
 
 **Tier 1 — built into the package, runs in-process on Railway**
 
-- `LocalGaussianPlumeBackend` (working) — steady-state Gaussian plume with Briggs rural σ coefficients. Sub-100 ms for typical workloads. Limitation: assumes steady state, breaks down for transient releases (spill events).
+- `LocalGaussianPlumeBackend` (working) — steady-state Gaussian plume with Briggs rural σ coefficients. Sub-100 ms for typical workloads. Limitation: assumes steady state, breaks down for transient releases (spill events) and has ~no skill in calm-nocturnal stagnation ("you cannot trap a plume that never arrived").
+- `StagnationBoxBackend` (working) — calm-night accumulation box (issue #3). Exact box recurrence `C[t] = C[t-1]·e^(−Δt/τ) + C*·(1−e^(−Δt/τ))` with `C* = E·τ/(A·H_mix)` and `H_mix` keyed off Pasquill stability. Receptor-independent v1. The default `gaussian_plume` request now performs per-timestep **regime dispatch**: stagnation hours (the `regime.is_stagnation` classifier) are served by the box, advective hours by the Gaussian plume. `disable_regime_dispatch=True` forces pure Gaussian; `backend="stagnation_box"` forces the box for every hour. Box *parameter calibration* is an experiments-repo follow-up (no calibration data in this service repo); v1 defaults are uncalibrated.
 - `LagrangianPuffBackend` (stub) — pure-Python CALPUFF-style puff model. ~300 lines to implement; runs in-process; handles non-stationary releases. Issue #1 in the repo.
 
 **Tier 2 — runs as a sibling Railway service, called via `RemoteHTTPBackend`**

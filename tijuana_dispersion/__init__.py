@@ -8,6 +8,7 @@ from .backends import (
     LagrangianPuffBackend,
     LocalGaussianPlumeBackend,
     RemoteHTTPBackend,
+    StagnationBoxBackend,
     build_default_ensemble,
 )
 from .calibration import (
@@ -52,6 +53,11 @@ from .schemas import (
     SourceSpec,
 )
 from .service import run_forward, run_inversion
+from .stagnation import (
+    H_MIX_BY_STABILITY_M,
+    StagnationBoxParams,
+    box_series,
+)
 
 __version__ = "0.3.0"
 # Grouped by submodule for readability; intentional ordering.
@@ -79,6 +85,10 @@ __all__ = [  # noqa: RUF022
     # regime (stagnation guardrail)
     "is_stagnation",
     "DEFAULT_U_CALM_MS",
+    # stagnation box (issue #3)
+    "StagnationBoxParams",
+    "box_series",
+    "H_MIX_BY_STABILITY_M",
     # calibration
     "distributed_channel_sources",
     "distributed_area_sources",
@@ -92,6 +102,7 @@ __all__ = [  # noqa: RUF022
     "BackendInfo",
     "LocalGaussianPlumeBackend",
     "LagrangianPuffBackend",
+    "StagnationBoxBackend",
     "RemoteHTTPBackend",
     "EnsembleBackend",
     "EnsembleMember",

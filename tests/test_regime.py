@@ -75,10 +75,11 @@ def test_schema_version_bumped_for_additive_change() -> None:
     """The contract gained additive fields → minor version bump.
 
     0.2.0 added the stagnation guardrail (issue #2); 0.3.0 added the
-    regime-dispatch / stagnation-box fields (issue #3). Both additive
-    and backward-compatible; assert it is at least 0.3.0.
+    regime-dispatch / stagnation-box fields (issue #3); 0.4.0 added the
+    temperature-led emission-driver fields (issue #6). All additive
+    and backward-compatible.
     """
-    assert SCHEMA_VERSION == "0.3.0"
+    assert SCHEMA_VERSION == "0.4.0"
 
 
 def test_forward_result_stagnation_fields_default_safe() -> None:

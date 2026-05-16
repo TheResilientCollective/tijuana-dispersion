@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "0.3.0"
+SCHEMA_VERSION = "0.4.0"
 
 
 class SourceSpec(BaseModel):
@@ -40,6 +40,24 @@ class MetSpec(BaseModel):
     is_night: bool
 
 
+class EmissionDriverParams(BaseModel):
+    """Temperature-led emission-driver parameters (schema 0.4.0,
+    issue #6). When the driver is enabled, the stagnation box's
+    local emission becomes time-varying:
+
+        E_local(t) = e0_g_s · q10 ** ((T(t) − t_ref_c) / 10)
+
+    ``e0_g_s = None`` means "use the sum of the request's source
+    emission rates as E0" (same lumped convention as the constant
+    box). Defaults are uncalibrated literature values; calibrating
+    them is an experiments-repo follow-up.
+    """
+
+    q10: float = 2.5
+    t_ref_c: float = 20.0
+    e0_g_s: float | None = None
+
+
 class ForwardRunRequest(BaseModel):
     """Request for a forward dispersion run."""
 
@@ -57,6 +75,13 @@ class ForwardRunRequest(BaseModel):
     # backward compatibility / ablation; stagnation_flags +
     # out_of_envelope are still reported either way.
     disable_regime_dispatch: bool = False
+    # Emission driver (schema 0.4.0, issue #6): when True, the box used
+    # on stagnation timesteps (regime dispatch, or forced
+    # backend="stagnation_box") gets a temperature-led, time-varying
+    # E_local(t) instead of the constant Σ-source-rate emission.
+    # Default False → exactly the issue-#3 behaviour (back-compatible).
+    emission_driver: bool = False
+    emission_driver_params: EmissionDriverParams | None = None
     cache_key: str | None = None
     notes: str | None = None
 

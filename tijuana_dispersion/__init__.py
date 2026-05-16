@@ -44,6 +44,7 @@ from .emissions import (
 from .regime import DEFAULT_U_CALM_MS, is_stagnation
 from .schemas import (
     SCHEMA_VERSION,
+    EmissionDriverParams,
     ForwardRunRequest,
     ForwardRunResult,
     InversionRequest,
@@ -56,7 +57,9 @@ from .service import run_forward, run_inversion
 from .stagnation import (
     H_MIX_BY_STABILITY_M,
     StagnationBoxParams,
+    TemperatureEmissionParams,
     box_series,
+    temperature_led_e_local,
 )
 
 __version__ = "0.3.0"
@@ -79,16 +82,19 @@ __all__ = [  # noqa: RUF022
     "ForwardRunResult",
     "InversionRequest",
     "InversionResult",
+    "EmissionDriverParams",
     # service
     "run_forward",
     "run_inversion",
     # regime (stagnation guardrail)
     "is_stagnation",
     "DEFAULT_U_CALM_MS",
-    # stagnation box (issue #3)
+    # stagnation box (issue #3) + emission driver (issue #6)
     "StagnationBoxParams",
     "box_series",
     "H_MIX_BY_STABILITY_M",
+    "TemperatureEmissionParams",
+    "temperature_led_e_local",
     # calibration
     "distributed_channel_sources",
     "distributed_area_sources",

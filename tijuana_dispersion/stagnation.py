@@ -38,6 +38,7 @@ placeholders, explicitly uncalibrated.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
@@ -74,8 +75,57 @@ class StagnationBoxParams:
     """
 
     tau_h: float = 3.0
-    e_local_g_s: float = 1.0
+    # Scalar (constant, issue #3) or a per-timestep sequence of length
+    # len(met) (time-varying, issue #6 — e.g. the temperature-led
+    # driver below). A constant series reduces exactly to the scalar.
+    e_local_g_s: float | Sequence[float] | np.ndarray = 1.0
     area_m2: float = 4.0e6
+
+
+@dataclass
+class TemperatureEmissionParams:
+    """Calm-night, temperature-led local-production parameters (#6).
+
+        E_local(t) = e0_g_s · q10 ** ((T(t) − t_ref_c) / 10)
+
+    Deliberately excludes the wind-quadratic volatilization and the
+    cosine-diel factors used in ``emissions.py``: the 2026-05-15
+    ``emission_driver_attribution`` study showed that chain is
+    *anti*-skilled in the trapped calm-night regime (its
+    ``f_volatilization ∝ wind²`` suppresses emissions on exactly the
+    calm hours), whereas temperature alone clears the constant-box
+    rank-skill ceiling. Defaults are uncalibrated literature values
+    (Q10≈2.5 for microbial sulfate reduction); calibrating
+    ``e0_g_s``/``q10``/``t_ref_c`` is an experiments-repo follow-up,
+    no calibration data lives in this repo.
+    """
+
+    e0_g_s: float = 1.0
+    q10: float = 2.5
+    t_ref_c: float = 20.0
+
+
+def temperature_led_e_local(
+    met: list[MetCondition],
+    params: TemperatureEmissionParams,
+    substrate: Sequence[float] | None = None,
+) -> np.ndarray:
+    """Per-timestep local emission (g/s), temperature-led.
+
+    Returns an array of length ``len(met)`` suitable to drop straight
+    into ``StagnationBoxParams.e_local_g_s``. ``substrate`` is an
+    optional element-wise multiplicative factor (e.g. an SBIWTP/flow
+    term); attribution found it secondary (solo skill < 0.11) so it
+    defaults to off.
+    """
+    t = np.array([m.temperature_c for m in met], dtype=float)
+    e = params.e0_g_s * np.power(params.q10, (t - params.t_ref_c) / 10.0)
+    if substrate is not None:
+        s = np.asarray(substrate, dtype=float)
+        if s.shape != e.shape:
+            raise ValueError(f"substrate length {s.shape} != number of timesteps {e.shape}")
+        e = e * s
+    return np.asarray(e, dtype=float)
 
 
 def _parse(ts: str) -> datetime | None:
@@ -120,7 +170,19 @@ def box_series(
     if n == 0:
         return out
 
-    e_ug_s = params.e_local_g_s * 1.0e6  # g/s → µg/s
+    # Resolve E_local to a per-timestep array (µg/s). A scalar
+    # broadcasts (issue #3); a sequence must match len(met) and is
+    # used element-wise (issue #6, time-varying driver).
+    e_local = params.e_local_g_s
+    if isinstance(e_local, (int, float)):
+        e_ug_s = np.full(n, float(e_local) * 1.0e6)
+    else:
+        e_seq = np.asarray(e_local, dtype=float)
+        if e_seq.shape != (n,):
+            raise ValueError(
+                f"e_local_g_s sequence length {e_seq.shape} != number of timesteps {(n,)}"
+            )
+        e_ug_s = e_seq * 1.0e6
     tau_s = params.tau_h * 3600.0
     steps = _step_hours(met)
 
@@ -129,7 +191,7 @@ def box_series(
         stab = pasquill_stability(m.wind_speed_ms, m.is_night, m.cloud_cover_frac)
         h_mix = H_MIX_BY_STABILITY_M[stab]
         # Analytic fixed point C* = E·τ / (A·H_mix)  [µg/m³].
-        c_star = e_ug_s * tau_s / (params.area_m2 * h_mix)
+        c_star = e_ug_s[i] * tau_s / (params.area_m2 * h_mix)
         decay = math.exp(-(dt_h * 3600.0) / tau_s)
         c = c * decay + c_star * (1.0 - decay)
         out[i] = c if units == "ugm3" else ugm3_to_ppb_h2s(c, m.temperature_c)

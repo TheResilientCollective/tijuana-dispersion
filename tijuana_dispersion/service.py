@@ -29,6 +29,7 @@ from .core import (
 )
 from .regime import is_stagnation
 from .schemas import (
+    EmissionDriverParams,
     ForwardRunRequest,
     ForwardRunResult,
     InversionRequest,
@@ -36,6 +37,12 @@ from .schemas import (
     MetSpec,
     ReceptorSpec,
     SourceSpec,
+)
+from .stagnation import (
+    StagnationBoxParams,
+    TemperatureEmissionParams,
+    box_series,
+    temperature_led_e_local,
 )
 
 # Cache directory is configurable via DISPERSION_CACHE_DIR. The default lives
@@ -87,6 +94,28 @@ def _to_core_met(specs: list[MetSpec]) -> list[MetCondition]:
     ]
 
 
+def _box_array(
+    sources: list[Source],
+    receptors: list[Receptor],
+    met: list[MetCondition],
+    req: ForwardRunRequest,
+) -> np.ndarray:
+    """Box concentration (n_times, n_receptors) for the stagnation
+    regime. With ``emission_driver`` off this is exactly the issue-#3
+    constant box (StagnationBoxBackend). With it on, ``E_local``
+    becomes the temperature-led, time-varying series (issue #6);
+    receptor-independent, so the column is broadcast."""
+    if not req.emission_driver:
+        return StagnationBoxBackend().run_forward(sources, receptors, met, units=req.units)
+    edp = req.emission_driver_params or EmissionDriverParams()
+    e0 = edp.e0_g_s if edp.e0_g_s is not None else float(sum(s.emission_rate_g_s for s in sources))
+    e_series = temperature_led_e_local(
+        met, TemperatureEmissionParams(e0_g_s=e0, q10=edp.q10, t_ref_c=edp.t_ref_c)
+    )
+    series = box_series(met, StagnationBoxParams(e_local_g_s=e_series), units=req.units)
+    return np.repeat(series[:, None], len(receptors), axis=1)
+
+
 def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
     """Execute a forward dispersion request."""
     cache_id = req.cache_key or _hash_request(req)
@@ -119,11 +148,16 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
     t0 = time.time()
     if req.backend == "stagnation_box":
         # Explicitly force the accumulation box for every hour.
-        box = StagnationBoxBackend()
         if req.return_per_source:
-            arr = box.run_forward_per_source(sources, receptors, met, units=req.units)
+            # Per-source view is receptor/emission-lumped; the
+            # emission driver (a single lumped E_local series) does
+            # not split per source, so keep the constant per-source
+            # box here (issue #6 driver applies to the 2-D path).
+            arr = StagnationBoxBackend().run_forward_per_source(
+                sources, receptors, met, units=req.units
+            )
         else:
-            arr = box.run_forward(sources, receptors, met, units=req.units)
+            arr = _box_array(sources, receptors, met, req)
         dispatch = "forced_box"
     elif req.return_per_source:
         arr = forward_run_per_source(sources, receptors, met, units=req.units)
@@ -138,9 +172,7 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
             # box on exactly those hours; advective hours stay Gaussian.
             dispatch = "regime"
             if out_of_envelope:
-                box_arr = StagnationBoxBackend().run_forward(
-                    sources, receptors, met, units=req.units
-                )
+                box_arr = _box_array(sources, receptors, met, req)
                 for t_idx, flagged in enumerate(stagnation_flags):
                     if flagged:
                         arr[t_idx, :] = box_arr[t_idx, :]
@@ -153,6 +185,7 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
         "n_stagnation_hours": n_stagnation,
         "regime": "stagnation" if out_of_envelope else "advective",
         "dispatch": dispatch,
+        "emission_driver": bool(req.emission_driver),
     }
 
     result = ForwardRunResult(

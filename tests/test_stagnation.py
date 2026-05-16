@@ -168,7 +168,8 @@ def _ms(ts: str, wind: float, night: bool) -> MetSpec:
 
 
 def test_schema_version_bumped() -> None:
-    assert SCHEMA_VERSION == "0.3.0"
+    # 0.3.0 (issue #3) → 0.4.0 (issue #6, additive emission-driver fields).
+    assert SCHEMA_VERSION == "0.4.0"
 
 
 def test_dispatch_uses_box_on_stagnation_gaussian_otherwise() -> None:

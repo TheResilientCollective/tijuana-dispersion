@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "0.2.0"
+SCHEMA_VERSION = "0.3.0"
 
 
 class SourceSpec(BaseModel):
@@ -44,12 +44,19 @@ class ForwardRunRequest(BaseModel):
     """Request for a forward dispersion run."""
 
     schema_version: str = SCHEMA_VERSION
-    backend: Literal["gaussian_plume", "hysplit"] = "gaussian_plume"
+    backend: Literal["gaussian_plume", "stagnation_box", "hysplit"] = "gaussian_plume"
     sources: list[SourceSpec]
     receptors: list[ReceptorSpec]
     meteorology: list[MetSpec]
     units: Literal["ppb", "ugm3"] = "ppb"
     return_per_source: bool = False
+    # Regime dispatch (schema 0.3.0): with the default gaussian_plume
+    # backend, calm-nocturnal stagnation timesteps are routed to the
+    # StagnationBoxBackend (the Gaussian plume has ~no skill there).
+    # Set True to disable dispatch and get a pure-Gaussian run for
+    # backward compatibility / ablation; stagnation_flags +
+    # out_of_envelope are still reported either way.
+    disable_regime_dispatch: bool = False
     cache_key: str | None = None
     notes: str | None = None
 

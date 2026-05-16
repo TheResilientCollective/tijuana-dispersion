@@ -38,6 +38,7 @@ from .core import (
     forward_run,
     forward_run_per_source,
 )
+from .stagnation import StagnationBoxParams, box_series
 
 
 @dataclass
@@ -152,6 +153,53 @@ class LagrangianPuffBackend(Backend):
             "Lagrangian puff backend not yet implemented. "
             "See the planning doc for the design sketch."
         )
+
+
+class StagnationBoxBackend(Backend):
+    """Calm-night accumulation box (service issue #3).
+
+    Implements the box recurrence in ``stagnation.box_series``: the
+    right zeroth-order physics when the nocturnal surface layer
+    decouples and the Gaussian-plume backends have ~no skill ("you
+    cannot trap a plume that never arrived").
+
+    v1 is intentionally **receptor-independent** — the box represents a
+    neighbourhood-scale accumulation volume, so every receptor column
+    is identical. The local emission feeding the box is the sum of the
+    supplied source rates; ``tau_h`` and ``area_m2`` use the
+    (uncalibrated) defaults in :class:`StagnationBoxParams`. Calibrating
+    those against the 242 Berry >100 ppb hours is an experiments-repo
+    follow-up (no calibration data lives in this service repo).
+    """
+
+    def __init__(self, params: StagnationBoxParams | None = None):
+        self._params = params
+
+    @property
+    def info(self) -> BackendInfo:
+        return BackendInfo(
+            name="stagnation_box",
+            version="0.1.0",
+            notes="calm-night accumulation box; receptor-independent v1; uncalibrated defaults",
+        )
+
+    def _resolve_params(self, sources: list[Source]) -> StagnationBoxParams:
+        if self._params is not None:
+            return self._params
+        e_local = float(sum(s.emission_rate_g_s for s in sources))
+        return StagnationBoxParams(e_local_g_s=e_local)
+
+    def run_forward(
+        self,
+        sources: list[Source],
+        receptors: list[Receptor],
+        met: list[MetCondition],
+        units: Literal["ppb", "ugm3"] = "ppb",
+    ) -> np.ndarray:
+        params = self._resolve_params(sources)
+        series = box_series(met, params, units=units)  # (n_t,)
+        # Receptor-independent: broadcast the box value across columns.
+        return np.repeat(series[:, None], len(receptors), axis=1)
 
 
 class RemoteHTTPBackend(Backend):

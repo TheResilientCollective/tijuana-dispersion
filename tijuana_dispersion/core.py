@@ -23,6 +23,11 @@ import numpy as np
 # Earth radius for great-circle distance (m)
 R_EARTH = 6371000.0
 
+# Number of image-source reflection pairs to sum when a mixing lid is active
+# (see gaussian_plume_concentration). 4 pairs is ample: terms beyond ~2 are
+# negligible below the σz>1.6·L well-mixed crossover.
+_LID_IMAGES = 4
+
 
 def latlon_to_local_xy(
     lat: np.ndarray, lon: np.ndarray, lat0: float, lon0: float
@@ -128,6 +133,10 @@ class MetCondition:
     temperature_c: float
     cloud_cover_frac: float
     is_night: bool
+    # Optional atmospheric mixing height (m). None => unbounded vertical
+    # mixing (original behavior). When set, the plume reflects off a lid at
+    # this height (nocturnal boundary layer traps emissions near the ground).
+    mixing_height_m: float | None = None
 
 
 def gaussian_plume_concentration(
@@ -178,11 +187,30 @@ def gaussian_plume_concentration(
     H = source.height_m
     z = receptor.height_m
 
-    # Gaussian plume with ground reflection
+    # Gaussian plume, µg/m³.
     Q = source.emission_rate_g_s * 1e6  # g/s → µg/s
     pref = Q / (2.0 * math.pi * u * sy * sz)
     crosswind = math.exp(-0.5 * (y / sy) ** 2)
-    vertical = math.exp(-0.5 * ((z - H) / sz) ** 2) + math.exp(-0.5 * ((z + H) / sz) ** 2)
+
+    L = met.mixing_height_m
+    if L is None or L <= 0.0:
+        # Unbounded vertical mixing: ground reflection only (original).
+        vertical = math.exp(-0.5 * ((z - H) / sz) ** 2) + math.exp(-0.5 * ((z + H) / sz) ** 2)
+        return float(pref * crosswind * vertical)
+
+    # Mixing lid at height L: the plume reflects off BOTH the ground (z=0)
+    # and the lid (z=L). Once σz has grown to fill the layer the profile is
+    # uniform; below that, sum a few image sources at ±2nL.
+    if sz > 1.6 * L:
+        # Well-mixed limit: C = Q / (√(2π)·u·σy·L) · crosswind.
+        # In terms of pref = Q/(2π·u·σy·σz): factor = √(2π)·σz/L.
+        vertical = math.sqrt(2.0 * math.pi) * sz / L
+        return float(pref * crosswind * vertical)
+
+    vertical = 0.0
+    for n in range(-_LID_IMAGES, _LID_IMAGES + 1):
+        vertical += math.exp(-0.5 * ((z - H - 2.0 * n * L) / sz) ** 2)
+        vertical += math.exp(-0.5 * ((z + H - 2.0 * n * L) / sz) ** 2)
     return float(pref * crosswind * vertical)  # µg/m³
 
 

@@ -89,6 +89,7 @@ def _to_core_met(specs: list[MetSpec]) -> list[MetCondition]:
             temperature_c=m.temperature_c,
             cloud_cover_frac=m.cloud_cover_frac,
             is_night=m.is_night,
+            mixing_height_m=m.mixing_height_m,
         )
         for m in specs
     ]

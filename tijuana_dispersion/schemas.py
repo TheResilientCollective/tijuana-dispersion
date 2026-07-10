@@ -38,6 +38,10 @@ class MetSpec(BaseModel):
     temperature_c: float
     cloud_cover_frac: float = 0.5
     is_night: bool
+    # Atmospheric mixing height (m). None => unbounded vertical mixing
+    # (original behavior); when set, the plume reflects off a lid at this
+    # height. See core.gaussian_plume_concentration.
+    mixing_height_m: float | None = None
 
 
 class EmissionDriverParams(BaseModel):

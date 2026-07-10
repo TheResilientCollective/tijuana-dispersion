@@ -11,6 +11,8 @@ the goal — these are physics tests against analytical expectations.
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -295,3 +297,82 @@ def test_forward_run_per_source_separates_contributions(
     total = forward_run([src_a, src_b], [nestor_receptor], [calm_night_met], units="ugm3")
     assert per_source.shape == (1, 1, 2)
     assert total[0, 0] == pytest.approx(per_source[0, 0, :].sum(), rel=1e-6)
+
+
+# ============================================================
+# Mixing lid (nocturnal boundary-layer trapping) — issue: mixing-height
+# ============================================================
+
+
+def _lidded(met: MetCondition, L: float | None) -> MetCondition:
+    return dataclasses.replace(met, mixing_height_m=L)
+
+
+def test_lid_none_matches_unbounded(
+    stewarts_source: Source, nestor_receptor: Receptor, calm_night_met: MetCondition
+) -> None:
+    """mixing_height_m=None reproduces the original unbounded plume exactly."""
+    base = gaussian_plume_concentration(stewarts_source, nestor_receptor, calm_night_met)
+    c = gaussian_plume_concentration(
+        stewarts_source, nestor_receptor, _lidded(calm_night_met, None)
+    )
+    assert c == base
+
+
+def test_high_lid_approximates_unbounded(
+    stewarts_source: Source, nestor_receptor: Receptor, calm_night_met: MetCondition
+) -> None:
+    """A very high lid is not felt by the plume -> ~unbounded."""
+    base = gaussian_plume_concentration(stewarts_source, nestor_receptor, calm_night_met)
+    c = gaussian_plume_concentration(
+        stewarts_source, nestor_receptor, _lidded(calm_night_met, 100_000.0)
+    )
+    assert c == pytest.approx(base, rel=1e-6)
+
+
+def test_shallow_lid_enhances_ground_concentration(
+    stewarts_source: Source, nestor_receptor: Receptor, calm_night_met: MetCondition
+) -> None:
+    """A shallow nocturnal lid traps the plume -> higher ground concentration."""
+    base = gaussian_plume_concentration(stewarts_source, nestor_receptor, calm_night_met)
+    c = gaussian_plume_concentration(
+        stewarts_source, nestor_receptor, _lidded(calm_night_met, 50.0)
+    )
+    assert c > base
+
+
+def test_lower_lid_more_enhancement(
+    stewarts_source: Source, nestor_receptor: Receptor, calm_night_met: MetCondition
+) -> None:
+    """Ground concentration increases monotonically as the lid lowers."""
+    c_hi = gaussian_plume_concentration(
+        stewarts_source, nestor_receptor, _lidded(calm_night_met, 400.0)
+    )
+    c_mid = gaussian_plume_concentration(
+        stewarts_source, nestor_receptor, _lidded(calm_night_met, 100.0)
+    )
+    c_lo = gaussian_plume_concentration(
+        stewarts_source, nestor_receptor, _lidded(calm_night_met, 40.0)
+    )
+    assert c_lo > c_mid > c_hi
+
+
+def test_wellmixed_limit_matches_reflection_at_crossover() -> None:
+    """Reflection sum and well-mixed formula agree at the σz≈1.6·L crossover
+    (continuity of the two regimes)."""
+
+    # A geometry/met where we can read σz and place L right at the crossover.
+    src = Source(name="s", lat=32.5406, lon=-117.0580, emission_rate_g_s=1.0, archetype="drain")
+    rec = Receptor(name="r", lat=32.5480, lon=-117.0660, height_m=0.0)
+    met = MetCondition(
+        timestamp="2026-03-14T03:00:00-08:00",
+        wind_speed_ms=1.5,
+        wind_direction_deg=135.0,
+        temperature_c=15.0,
+        cloud_cover_frac=0.2,
+        is_night=True,
+    )
+    # Just below vs just above the crossover should be within a few %.
+    c_below = gaussian_plume_concentration(src, rec, _lidded(met, 200.0))  # reflection or mixed
+    c_above = gaussian_plume_concentration(src, rec, _lidded(met, 199.0))
+    assert c_above == pytest.approx(c_below, rel=0.05)

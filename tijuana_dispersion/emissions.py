@@ -127,6 +127,19 @@ class EmissionParameters:
     a_ebb: float = 0.0
     ebb_source_names: tuple[str, ...] = ()
 
+    # Flow-driven turbulence enhancement at the same hotspot sources
+    # (Frobenius et al., ACS EST Air 2026, 3, 1758-1771: gas-phase
+    # VOC/H2S at Nestor peaked with transboundary flow >50 MGD and
+    # collapsed below ~10 MGD even while dissolved H2S stayed high —
+    # the drop's turbulence, hence stripping, scales with flow). Model:
+    # f_flow = 1 + a_flow * max(0, border_flow_m3s - flow_threshold_m3s),
+    # applied to ebb_source_names (the culvert drop drives both terms).
+    # a_flow = 0 (default) disables it; drivers without border flow
+    # (None) are treated as at-threshold (factor 1). The threshold
+    # default 0.44 m3/s ~ 10 MGD, the paper's collapse point.
+    a_flow: float = 0.0
+    flow_threshold_m3s: float = 0.44
+
 
 # ---------- Parametric functions ---------- #
 
@@ -186,6 +199,19 @@ def f_diel(driver: EmissionDrivers, params: EmissionParameters) -> float:
     return 1.0 + 0.5 * (params.diel_amplitude - 1.0) * (1.0 + math.cos(angle))
 
 
+def f_flow_turbulence(driver: EmissionDrivers, params: EmissionParameters) -> float:
+    """Hotspot-drop enhancement with river flow.
+
+    ``1 + a_flow * max(0, border_flow_m3s - flow_threshold_m3s)`` — inert
+    when ``a_flow`` is 0 or the driver carries no border flow. Identifiable
+    only across windows with flow contrast (within a constant-flow window
+    it degenerates into the source baseline).
+    """
+    if driver.border_flow_m3s is None:
+        return 1.0
+    return 1.0 + params.a_flow * max(0.0, driver.border_flow_m3s - params.flow_threshold_m3s)
+
+
 def f_tide_ebb(driver: EmissionDrivers, params: EmissionParameters) -> float:
     """Culvert-drop enhancement on the falling tide.
 
@@ -240,7 +266,7 @@ class EmissionsModel:
             * f_volatilization(driver, self.params, location.archetype)
             * f_diel(driver, self.params)
             * (
-                f_tide_ebb(driver, self.params)
+                f_tide_ebb(driver, self.params) * f_flow_turbulence(driver, self.params)
                 if location.name in self.params.ebb_source_names
                 else 1.0
             )

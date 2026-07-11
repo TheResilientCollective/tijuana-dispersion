@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from tijuana_dispersion import MetCondition, Receptor, Source
+from tijuana_dispersion import MetCondition, Receptor, Source, service
+
+
+@pytest.fixture(autouse=True)
+def _isolated_forward_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the run_forward request cache at a per-test directory.
+
+    The cache is keyed on the request hash only — physics changes that
+    don't alter the request (monkeypatched internals, code edits between
+    runs) would otherwise serve stale results across tests.
+    """
+    cache = tmp_path / "forward_cache"
+    cache.mkdir()
+    monkeypatch.setattr(service, "CACHE_DIR", cache)
 
 
 @pytest.fixture

@@ -45,7 +45,14 @@ from typing import Literal
 
 import numpy as np
 
-from .core import MetCondition, pasquill_stability, ugm3_to_ppb_h2s
+from .core import (
+    MetCondition,
+    Receptor,
+    Source,
+    latlon_to_local_xy,
+    pasquill_stability,
+    ugm3_to_ppb_h2s,
+)
 
 # Mixing depth (m) by Pasquill stability class. Deep, well-mixed
 # convective boundary layer for unstable A; a collapsed, decoupled
@@ -126,6 +133,34 @@ def temperature_led_e_local(
             raise ValueError(f"substrate length {s.shape} != number of timesteps {e.shape}")
         e = e * s
     return np.asarray(e, dtype=float)
+
+
+def distance_weighted_e_local(
+    sources: list[Source],
+    receptor: Receptor,
+    lambda_m: float,
+) -> float:
+    """Receptor-local emission (g/s): ``Σ_s rate_s · exp(−d_rs / λ)``.
+
+    The v1 box lumps every source into one neighbourhood-scale volume, so
+    a receptor 0.9 km from a channel source (Berry ← Saturn Blvd Bridge)
+    sees the same concentration as one 4 km away — the 2026-07-11
+    regime-stratified sweep showed that geometry-blindness is the dominant
+    calm-night misfit. This kernel restores the geometry: each source
+    feeds the receptor's box in proportion to an exponential decay of the
+    great-circle distance, with decay length ``lambda_m`` (calibratable).
+    λ → ∞ recovers the lumped ``Σ rate_s`` convention.
+    """
+    if lambda_m <= 0.0:
+        raise ValueError(f"lambda_m must be positive, got {lambda_m}")
+    if not sources:
+        return 0.0
+    lats = np.array([s.lat for s in sources])
+    lons = np.array([s.lon for s in sources])
+    dx, dy = latlon_to_local_xy(lats, lons, receptor.lat, receptor.lon)
+    d = np.hypot(dx, dy)
+    rates = np.array([s.emission_rate_g_s for s in sources])
+    return float(np.sum(rates * np.exp(-d / lambda_m)))
 
 
 def _parse(ts: str) -> datetime | None:

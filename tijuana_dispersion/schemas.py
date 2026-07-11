@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "0.4.0"
+SCHEMA_VERSION = "0.5.0"
 
 
 class SourceSpec(BaseModel):
@@ -62,6 +62,23 @@ class EmissionDriverParams(BaseModel):
     e0_g_s: float | None = None
 
 
+class StagnationBoxSpec(BaseModel):
+    """Stagnation-box overrides (schema 0.5.0, issue #3 follow-up).
+
+    ``lambda_m`` switches the box from the lumped, receptor-independent
+    v1 to a **receptor-dependent** model: each receptor's box is fed by
+    ``E_r = Σ_s rate_s · exp(−d_rs / lambda_m)``, so proximity to a
+    source (Berry ← Saturn Blvd Bridge, 0.9 km) finally matters on calm
+    nights. ``None`` keeps v1 exactly. ``tau_h``/``area_m2`` expose the
+    box constants for calibration; defaults match
+    :class:`stagnation.StagnationBoxParams`.
+    """
+
+    lambda_m: float | None = Field(default=None, gt=0.0)
+    tau_h: float = Field(default=3.0, gt=0.0)
+    area_m2: float = Field(default=4.0e6, gt=0.0)
+
+
 class ForwardRunRequest(BaseModel):
     """Request for a forward dispersion run."""
 
@@ -86,6 +103,10 @@ class ForwardRunRequest(BaseModel):
     # Default False → exactly the issue-#3 behaviour (back-compatible).
     emission_driver: bool = False
     emission_driver_params: EmissionDriverParams | None = None
+    # Stagnation-box overrides (schema 0.5.0): lambda_m enables the
+    # receptor-dependent distance kernel; tau_h/area_m2 expose the box
+    # constants. None → the v1 lumped box, byte-identical behaviour.
+    stagnation_box: StagnationBoxSpec | None = None
     cache_key: str | None = None
     notes: str | None = None
 

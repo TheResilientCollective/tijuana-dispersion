@@ -41,7 +41,6 @@ from .schemas import (
 from .stagnation import (
     StagnationBoxParams,
     TemperatureEmissionParams,
-    box_series,
     temperature_led_e_local,
 )
 
@@ -102,19 +101,31 @@ def _box_array(
     req: ForwardRunRequest,
 ) -> np.ndarray:
     """Box concentration (n_times, n_receptors) for the stagnation
-    regime. With ``emission_driver`` off this is exactly the issue-#3
-    constant box (StagnationBoxBackend). With it on, ``E_local``
-    becomes the temperature-led, time-varying series (issue #6);
-    receptor-independent, so the column is broadcast."""
+    regime. With ``emission_driver`` off this is the issue-#3 constant
+    box; with it on, ``E_local`` becomes the temperature-led series
+    (issue #6). ``req.stagnation_box`` (schema 0.5.0) additionally
+    overrides tau/area and — when ``lambda_m`` is set — switches to the
+    receptor-dependent distance kernel; both compose with the driver
+    (the kernel weights scale the driver's lumped series per receptor)."""
+    sb = req.stagnation_box
+    params = StagnationBoxParams(tau_h=sb.tau_h, area_m2=sb.area_m2) if sb is not None else None
+    lambda_m = sb.lambda_m if sb is not None else None
+
     if not req.emission_driver:
-        return StagnationBoxBackend().run_forward(sources, receptors, met, units=req.units)
+        if params is not None:
+            params.e_local_g_s = float(sum(s.emission_rate_g_s for s in sources))
+        backend = StagnationBoxBackend(params, lambda_m=lambda_m)
+        return backend.run_forward(sources, receptors, met, units=req.units)
+
     edp = req.emission_driver_params or EmissionDriverParams()
     e0 = edp.e0_g_s if edp.e0_g_s is not None else float(sum(s.emission_rate_g_s for s in sources))
     e_series = temperature_led_e_local(
         met, TemperatureEmissionParams(e0_g_s=e0, q10=edp.q10, t_ref_c=edp.t_ref_c)
     )
-    series = box_series(met, StagnationBoxParams(e_local_g_s=e_series), units=req.units)
-    return np.repeat(series[:, None], len(receptors), axis=1)
+    driver_params = params if params is not None else StagnationBoxParams()
+    driver_params.e_local_g_s = e_series
+    backend = StagnationBoxBackend(driver_params, lambda_m=lambda_m)
+    return backend.run_forward(sources, receptors, met, units=req.units)
 
 
 def run_forward(req: ForwardRunRequest) -> ForwardRunResult:

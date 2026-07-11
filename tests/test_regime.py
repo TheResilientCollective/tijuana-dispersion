@@ -79,7 +79,7 @@ def test_schema_version_bumped_for_additive_change() -> None:
     temperature-led emission-driver fields (issue #6). All additive
     and backward-compatible.
     """
-    assert SCHEMA_VERSION == "0.4.0"
+    assert SCHEMA_VERSION >= "0.4.0"
 
 
 def test_forward_result_stagnation_fields_default_safe() -> None:

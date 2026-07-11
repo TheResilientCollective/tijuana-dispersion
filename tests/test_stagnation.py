@@ -15,6 +15,7 @@ experiments-repo follow-up (no calibration data lives in this repo).
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from tijuana_dispersion import (
     ForwardRunRequest,
@@ -25,6 +26,7 @@ from tijuana_dispersion import (
     Source,
     SourceSpec,
     StagnationBoxBackend,
+    StagnationBoxSpec,
     run_forward,
 )
 from tijuana_dispersion.schemas import SCHEMA_VERSION
@@ -32,6 +34,7 @@ from tijuana_dispersion.stagnation import (
     H_MIX_BY_STABILITY_M,
     StagnationBoxParams,
     box_series,
+    distance_weighted_e_local,
 )
 
 
@@ -168,8 +171,8 @@ def _ms(ts: str, wind: float, night: bool) -> MetSpec:
 
 
 def test_schema_version_bumped() -> None:
-    # 0.3.0 (issue #3) → 0.4.0 (issue #6, additive emission-driver fields).
-    assert SCHEMA_VERSION == "0.4.0"
+    # 0.4.0 (issue #6) → 0.5.0 (receptor-dependent stagnation box).
+    assert SCHEMA_VERSION == "0.5.0"
 
 
 def test_dispatch_uses_box_on_stagnation_gaussian_otherwise() -> None:
@@ -215,3 +218,121 @@ def test_force_stagnation_box_backend_for_all_hours() -> None:
     # Forced box: even the advective hour is the box value, not Gaussian 0.
     assert np.all(conc[:, 0] >= 0.0)
     assert res.backend == "stagnation_box"
+
+
+# ---------- receptor-dependent kernel (schema 0.5.0) ---------- #
+
+
+def _kernel_sources() -> list[Source]:
+    """One strong source near NESTOR (Saturn Blvd Bridge geometry), one
+    equal-rate source ~4 km south (Stewart's Drain geometry)."""
+    return [
+        Source(name="Saturn Blvd Bridge", lat=32.5594, lon=-117.0930, emission_rate_g_s=1.0),
+        Source(name="Stewart's Drain", lat=32.54064, lon=-117.05801, emission_rate_g_s=1.0),
+    ]
+
+
+def _kernel_receptors() -> list[Receptor]:
+    return [
+        Receptor(name="NESTOR - BES", lat=32.567097, lon=-117.090656),  # 0.9 km from Saturn
+        Receptor(name="IB CIVIC CTR", lat=32.5859, lon=-117.1132),  # ~3.5 km away
+    ]
+
+
+def test_distance_weighted_e_local_limits() -> None:
+    sources = _kernel_sources()
+    nestor = _kernel_receptors()[0]
+    total = sum(s.emission_rate_g_s for s in sources)
+    # Huge lambda recovers the lumped sum.
+    assert distance_weighted_e_local(sources, nestor, 1.0e12) == pytest.approx(total, rel=1e-6)
+    # Small lambda: only the nearby source contributes materially, and the
+    # result is bounded by its rate.
+    e_small = distance_weighted_e_local(sources, nestor, 500.0)
+    assert 0.0 < e_small < sources[0].emission_rate_g_s
+    # Larger lambda ⇒ more emission reaches the receptor (monotone).
+    assert distance_weighted_e_local(sources, nestor, 2000.0) > e_small
+    with pytest.raises(ValueError, match="lambda_m"):
+        distance_weighted_e_local(sources, nestor, 0.0)
+    assert distance_weighted_e_local([], nestor, 1000.0) == 0.0
+
+
+def test_backend_lambda_none_is_v1_exactly() -> None:
+    sources = _kernel_sources()
+    receptors = _kernel_receptors()
+    met = [_met(f"2026-05-10T{h:02d}:00:00-07:00", 1.2, night=True) for h in range(4)]
+    v1 = StagnationBoxBackend().run_forward(sources, receptors, met, units="ppb")
+    v1_explicit = StagnationBoxBackend(lambda_m=None).run_forward(
+        sources, receptors, met, units="ppb"
+    )
+    assert np.array_equal(v1, v1_explicit)
+    assert np.allclose(v1[:, 0], v1[:, 1])  # receptor-independent
+
+
+def test_backend_kernel_orders_receptors_by_proximity() -> None:
+    sources = _kernel_sources()
+    receptors = _kernel_receptors()
+    met = [_met(f"2026-05-10T{h:02d}:00:00-07:00", 1.2, night=True) for h in range(4)]
+    arr = StagnationBoxBackend(lambda_m=1000.0).run_forward(sources, receptors, met, units="ppb")
+    assert arr.shape == (4, 2)
+    # NESTOR (0.9 km from Saturn Blvd Bridge) accumulates more than IB (~3.5 km).
+    assert np.all(arr[:, 0] > arr[:, 1])
+    # Huge lambda converges to the v1 lumped columns.
+    v1 = StagnationBoxBackend().run_forward(sources, receptors, met, units="ppb")
+    big = StagnationBoxBackend(lambda_m=1.0e12).run_forward(sources, receptors, met, units="ppb")
+    assert np.allclose(big, v1, rtol=1e-6)
+
+
+def test_request_stagnation_box_spec_dispatch() -> None:
+    """run_forward honors stagnation_box: receptor-dependent columns on
+    stagnation hours; omitting the spec keeps v1 behaviour."""
+    met_specs = [_ms("2026-03-14T02:00:00-08:00", 1.0, night=True)]
+    base = ForwardRunRequest(
+        sources=[
+            SourceSpec(
+                name="Saturn Blvd Bridge", lat=32.5594, lon=-117.0930, emission_rate_g_s=1.0
+            ),
+            SourceSpec(name="Stewart's Drain", lat=32.54064, lon=-117.05801, emission_rate_g_s=1.0),
+        ],
+        receptors=[
+            ReceptorSpec(name="NESTOR - BES", lat=32.567097, lon=-117.090656),
+            ReceptorSpec(name="IB CIVIC CTR", lat=32.5859, lon=-117.1132),
+        ],
+        meteorology=met_specs,
+    )
+    plain = run_forward(base)
+    a = np.asarray(plain.concentrations)
+    assert a[0, 0] == pytest.approx(a[0, 1])  # v1: identical columns
+
+    kernel = run_forward(
+        base.model_copy(update={"stagnation_box": StagnationBoxSpec(lambda_m=1000.0)})
+    )
+    b = np.asarray(kernel.concentrations)
+    assert b[0, 0] > b[0, 1]  # NESTOR column now larger
+
+    # tau override moves the concentration (longer residence ⇒ higher C).
+    slow = run_forward(
+        base.model_copy(update={"stagnation_box": StagnationBoxSpec(lambda_m=1000.0, tau_h=6.0)})
+    )
+    c = np.asarray(slow.concentrations)
+    assert c[0, 0] > b[0, 0]
+
+
+def test_kernel_composes_with_emission_driver() -> None:
+    met_specs = [_ms("2026-03-14T02:00:00-08:00", 1.0, night=True)]
+    req = ForwardRunRequest(
+        sources=[
+            SourceSpec(
+                name="Saturn Blvd Bridge", lat=32.5594, lon=-117.0930, emission_rate_g_s=1.0
+            ),
+            SourceSpec(name="Stewart's Drain", lat=32.54064, lon=-117.05801, emission_rate_g_s=1.0),
+        ],
+        receptors=[
+            ReceptorSpec(name="NESTOR - BES", lat=32.567097, lon=-117.090656),
+            ReceptorSpec(name="IB CIVIC CTR", lat=32.5859, lon=-117.1132),
+        ],
+        meteorology=met_specs,
+        emission_driver=True,
+        stagnation_box=StagnationBoxSpec(lambda_m=1000.0),
+    )
+    arr = np.asarray(run_forward(req).concentrations)
+    assert arr[0, 0] > arr[0, 1]  # geometry survives the driver

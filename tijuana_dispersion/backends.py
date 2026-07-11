@@ -38,7 +38,7 @@ from .core import (
     forward_run,
     forward_run_per_source,
 )
-from .stagnation import StagnationBoxParams, box_series
+from .stagnation import StagnationBoxParams, box_series, distance_weighted_e_local
 
 
 @dataclass
@@ -172,15 +172,25 @@ class StagnationBoxBackend(Backend):
     follow-up (no calibration data lives in this service repo).
     """
 
-    def __init__(self, params: StagnationBoxParams | None = None):
+    def __init__(
+        self,
+        params: StagnationBoxParams | None = None,
+        lambda_m: float | None = None,
+    ):
         self._params = params
+        self._lambda_m = lambda_m
 
     @property
     def info(self) -> BackendInfo:
+        kernel = (
+            f"receptor-dependent (lambda={self._lambda_m:.0f} m)"
+            if self._lambda_m is not None
+            else "receptor-independent v1"
+        )
         return BackendInfo(
             name="stagnation_box",
-            version="0.1.0",
-            notes="calm-night accumulation box; receptor-independent v1; uncalibrated defaults",
+            version="0.2.0",
+            notes=f"calm-night accumulation box; {kernel}; uncalibrated defaults",
         )
 
     def _resolve_params(self, sources: list[Source]) -> StagnationBoxParams:
@@ -197,9 +207,37 @@ class StagnationBoxBackend(Backend):
         units: Literal["ppb", "ugm3"] = "ppb",
     ) -> np.ndarray:
         params = self._resolve_params(sources)
-        series = box_series(met, params, units=units)  # (n_t,)
-        # Receptor-independent: broadcast the box value across columns.
-        return np.repeat(series[:, None], len(receptors), axis=1)
+        if self._lambda_m is None:
+            series = box_series(met, params, units=units)  # (n_t,)
+            # Receptor-independent: broadcast the box value across columns.
+            return np.repeat(series[:, None], len(receptors), axis=1)
+
+        # Receptor-dependent kernel: each receptor's box is fed by the
+        # distance-weighted local emission (stagnation.distance_weighted_
+        # e_local); tau/area come from the shared params. Any explicit
+        # e_local_g_s in params is interpreted as a *lumped* series and
+        # rescaled per receptor by the kernel weight w_r = E_r / Σ rates,
+        # so a time-varying driver composes with the geometry.
+        total = float(sum(s.emission_rate_g_s for s in sources))
+        cols = []
+        for rec in receptors:
+            e_r = distance_weighted_e_local(sources, rec, self._lambda_m)
+            w_r = e_r / total if total > 0.0 else 0.0
+            e_local = params.e_local_g_s
+            if isinstance(e_local, (int, float)):
+                rec_params = StagnationBoxParams(
+                    tau_h=params.tau_h,
+                    e_local_g_s=float(e_local) * w_r if self._params is not None else e_r,
+                    area_m2=params.area_m2,
+                )
+            else:
+                rec_params = StagnationBoxParams(
+                    tau_h=params.tau_h,
+                    e_local_g_s=np.asarray(e_local, dtype=float) * w_r,
+                    area_m2=params.area_m2,
+                )
+            cols.append(box_series(met, rec_params, units=units))
+        return np.stack(cols, axis=1)
 
 
 class RemoteHTTPBackend(Backend):

@@ -146,7 +146,7 @@ def test_box_series_scalar_path_unchanged_regression() -> None:
 
 
 def test_schema_version_bumped_to_0_4_0() -> None:
-    assert SCHEMA_VERSION == "0.4.0"
+    assert SCHEMA_VERSION >= "0.4.0"
 
 
 def test_emission_driver_request_fields_default_off() -> None:

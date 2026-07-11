@@ -52,6 +52,7 @@ from .schemas import (
     MetSpec,
     ReceptorSpec,
     SourceSpec,
+    StagnationBoxSpec,
 )
 from .service import run_forward, run_inversion
 from .stagnation import (
@@ -59,10 +60,11 @@ from .stagnation import (
     StagnationBoxParams,
     TemperatureEmissionParams,
     box_series,
+    distance_weighted_e_local,
     temperature_led_e_local,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 # Grouped by submodule for readability; intentional ordering.
 __all__ = [  # noqa: RUF022
     # core
@@ -91,6 +93,8 @@ __all__ = [  # noqa: RUF022
     "DEFAULT_U_CALM_MS",
     # stagnation box (issue #3) + emission driver (issue #6)
     "StagnationBoxParams",
+    "StagnationBoxSpec",
+    "distance_weighted_e_local",
     "box_series",
     "H_MIX_BY_STABILITY_M",
     "TemperatureEmissionParams",

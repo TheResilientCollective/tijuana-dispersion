@@ -109,12 +109,20 @@ def _box_array(
     (the kernel weights scale the driver's lumped series per receptor)."""
     sb = req.stagnation_box
     params = StagnationBoxParams(tau_h=sb.tau_h, area_m2=sb.area_m2) if sb is not None else None
-    lambda_m = sb.lambda_m if sb is not None else None
+    kernel_kw: dict = (
+        {
+            "lambda_m": sb.lambda_m,
+            "drainage_bearing_deg": sb.drainage_bearing_deg,
+            "lambda_cross_m": sb.lambda_cross_m,
+        }
+        if sb is not None
+        else {}
+    )
 
     if not req.emission_driver:
         if params is not None:
             params.e_local_g_s = float(sum(s.emission_rate_g_s for s in sources))
-        backend = StagnationBoxBackend(params, lambda_m=lambda_m)
+        backend = StagnationBoxBackend(params, **kernel_kw)
         return backend.run_forward(sources, receptors, met, units=req.units)
 
     edp = req.emission_driver_params or EmissionDriverParams()
@@ -124,7 +132,7 @@ def _box_array(
     )
     driver_params = params if params is not None else StagnationBoxParams()
     driver_params.e_local_g_s = e_series
-    backend = StagnationBoxBackend(driver_params, lambda_m=lambda_m)
+    backend = StagnationBoxBackend(driver_params, **kernel_kw)
     return backend.run_forward(sources, receptors, met, units=req.units)
 
 

@@ -38,7 +38,12 @@ from .core import (
     forward_run,
     forward_run_per_source,
 )
-from .stagnation import StagnationBoxParams, box_series, distance_weighted_e_local
+from .stagnation import (
+    StagnationBoxParams,
+    box_series,
+    distance_weighted_e_local,
+    drainage_weighted_e_local,
+)
 
 
 @dataclass
@@ -176,9 +181,15 @@ class StagnationBoxBackend(Backend):
         self,
         params: StagnationBoxParams | None = None,
         lambda_m: float | None = None,
+        drainage_bearing_deg: float | None = None,
+        lambda_cross_m: float = 500.0,
     ):
         self._params = params
         self._lambda_m = lambda_m
+        self._drainage_bearing_deg = drainage_bearing_deg
+        self._lambda_cross_m = lambda_cross_m
+        if drainage_bearing_deg is not None and lambda_m is None:
+            raise ValueError("drainage_bearing_deg requires lambda_m (the along-valley decay)")
 
     @property
     def info(self) -> BackendInfo:
@@ -221,7 +232,16 @@ class StagnationBoxBackend(Backend):
         total = float(sum(s.emission_rate_g_s for s in sources))
         cols = []
         for rec in receptors:
-            e_r = distance_weighted_e_local(sources, rec, self._lambda_m)
+            if self._drainage_bearing_deg is not None:
+                e_r = drainage_weighted_e_local(
+                    sources,
+                    rec,
+                    lambda_along_m=self._lambda_m,
+                    lambda_cross_m=self._lambda_cross_m,
+                    bearing_deg=self._drainage_bearing_deg,
+                )
+            else:
+                e_r = distance_weighted_e_local(sources, rec, self._lambda_m)
             w_r = e_r / total if total > 0.0 else 0.0
             e_local = params.e_local_g_s
             if isinstance(e_local, (int, float)):

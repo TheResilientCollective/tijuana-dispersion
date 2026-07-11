@@ -38,6 +38,7 @@ from .emissions import (
     f_diel,
     f_substrate,
     f_temperature,
+    f_tide_ebb,
     f_volatilization,
     make_emissions_model_with_overrides,
 )
@@ -61,6 +62,7 @@ from .stagnation import (
     TemperatureEmissionParams,
     box_series,
     distance_weighted_e_local,
+    drainage_weighted_e_local,
     temperature_led_e_local,
 )
 
@@ -95,6 +97,7 @@ __all__ = [  # noqa: RUF022
     "StagnationBoxParams",
     "StagnationBoxSpec",
     "distance_weighted_e_local",
+    "drainage_weighted_e_local",
     "box_series",
     "H_MIX_BY_STABILITY_M",
     "TemperatureEmissionParams",
@@ -123,6 +126,7 @@ __all__ = [  # noqa: RUF022
     "EmissionsModel",
     "SourceSpecLocation",
     "f_temperature",
+    "f_tide_ebb",
     "f_substrate",
     "f_volatilization",
     "f_diel",

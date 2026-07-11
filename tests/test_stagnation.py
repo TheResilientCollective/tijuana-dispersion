@@ -14,6 +14,8 @@ experiments-repo follow-up (no calibration data lives in this repo).
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -35,6 +37,7 @@ from tijuana_dispersion.stagnation import (
     StagnationBoxParams,
     box_series,
     distance_weighted_e_local,
+    drainage_weighted_e_local,
 )
 
 
@@ -336,3 +339,71 @@ def test_kernel_composes_with_emission_driver() -> None:
     )
     arr = np.asarray(run_forward(req).concentrations)
     assert arr[0, 0] > arr[0, 1]  # geometry survives the driver
+
+
+# ---------- drainage kernel (Saturn Blvd mechanism) ---------- #
+
+VALLEY_BEARING = 280.0  # Tijuana River drainage direction (flow toward WNW)
+
+
+def _valley_sources() -> list[Source]:
+    """The real channel chain, up-valley (E) to down-valley (W)."""
+    return [
+        Source(name="Dairy Mart Bridge", lat=32.5485, lon=-117.0643, emission_rate_g_s=1.0),
+        Source(name="Hollister St Bridge N", lat=32.5542, lon=-117.0841, emission_rate_g_s=1.0),
+        Source(name="Saturn Blvd Bridge", lat=32.5594, lon=-117.0930, emission_rate_g_s=1.0),
+    ]
+
+
+def test_drainage_kernel_splits_nestor_from_san_ysidro() -> None:
+    """The decisive geometry: NESTOR sits down-valley of the channel
+    chain, SAN YSIDRO up-valley — the isotropic kernel provably cannot
+    split them (2026-07-11 lambda sweep); the directional one must."""
+    sources = _valley_sources()
+    nestor = Receptor(name="NESTOR - BES", lat=32.5671, lon=-117.0907)
+    sy = Receptor(name="SAN YSIDRO", lat=32.5528, lon=-117.0473)
+    e_nestor = drainage_weighted_e_local(sources, nestor, 3000.0, 500.0, VALLEY_BEARING)
+    e_sy = drainage_weighted_e_local(sources, sy, 3000.0, 500.0, VALLEY_BEARING)
+    assert e_nestor > 3.0 * e_sy
+
+
+def test_drainage_kernel_directionality() -> None:
+    src = [Source(name="s", lat=32.5594, lon=-117.0930, emission_rate_g_s=1.0)]
+    # Receptor 1 km downstream (bearing 280 from the source) vs 1 km upstream.
+    phi = math.radians(VALLEY_BEARING)
+    dlat = math.cos(phi) * 1000.0 / 111_320.0
+    dlon = math.sin(phi) * 1000.0 / (111_320.0 * math.cos(math.radians(32.56)))
+    down = Receptor(name="down", lat=32.5594 + dlat, lon=-117.0930 + dlon)
+    up = Receptor(name="up", lat=32.5594 - dlat, lon=-117.0930 - dlon)
+    e_down = drainage_weighted_e_local(src, down, 3000.0, 300.0, VALLEY_BEARING)
+    e_up = drainage_weighted_e_local(src, up, 3000.0, 300.0, VALLEY_BEARING)
+    # Downstream decays on the 3000 m scale, upstream on the 300 m scale.
+    assert e_down > 5.0 * e_up
+    with pytest.raises(ValueError, match="positive"):
+        drainage_weighted_e_local(src, down, -1.0, 300.0, VALLEY_BEARING)
+    assert drainage_weighted_e_local([], down, 3000.0, 300.0, VALLEY_BEARING) == 0.0
+
+
+def test_backend_drainage_requires_lambda() -> None:
+    with pytest.raises(ValueError, match="requires lambda_m"):
+        StagnationBoxBackend(drainage_bearing_deg=280.0)
+
+
+def test_request_drainage_spec_dispatch() -> None:
+    met_specs = [_ms("2026-03-14T02:00:00-08:00", 1.0, night=True)]
+    req = ForwardRunRequest(
+        sources=[
+            SourceSpec(name=s.name, lat=s.lat, lon=s.lon, emission_rate_g_s=1.0)
+            for s in _valley_sources()
+        ],
+        receptors=[
+            ReceptorSpec(name="NESTOR - BES", lat=32.5671, lon=-117.0907),
+            ReceptorSpec(name="SAN YSIDRO", lat=32.5528, lon=-117.0473),
+        ],
+        meteorology=met_specs,
+        stagnation_box=StagnationBoxSpec(
+            lambda_m=3000.0, drainage_bearing_deg=280.0, lambda_cross_m=500.0
+        ),
+    )
+    arr = np.asarray(run_forward(req).concentrations)
+    assert arr[0, 0] > 3.0 * arr[0, 1]  # NESTOR >> SY on the stagnation hour

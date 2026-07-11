@@ -163,6 +163,54 @@ def distance_weighted_e_local(
     return float(np.sum(rates * np.exp(-d / lambda_m)))
 
 
+def drainage_weighted_e_local(
+    sources: list[Source],
+    receptor: Receptor,
+    lambda_along_m: float,
+    lambda_cross_m: float,
+    bearing_deg: float,
+) -> float:
+    """Receptor-local emission (g/s) under down-valley drainage flow.
+
+    On calm stable nights the valley drains toward ``bearing_deg`` (the
+    direction the flow moves TOWARD, CW from north; Tijuana River valley
+    ≈ 280°). A receptor accumulates the emissions of sources *upstream*
+    of it along that axis — the isotropic kernel provably cannot split
+    NESTOR from SAN YSIDRO (2026-07-11 λ sweep), but directionality can:
+    NESTOR sits down-valley of the Saturn/Hollister/Dairy Mart channel
+    chain while SAN YSIDRO sits up-valley of it.
+
+        along = (receptor − source) · flow_unit        (m, >0 = downstream)
+        w_s   = exp(−along⁺/λ_along − (|cross| + along⁻)/λ_cross)
+
+    Upstream sources decay on the long along-valley scale; abeam and
+    downstream sources decay on the short cross-valley scale (counter-
+    drainage transport is as slow as cross-valley mixing).
+    """
+    if lambda_along_m <= 0.0 or lambda_cross_m <= 0.0:
+        raise ValueError(
+            f"lambda_along_m/lambda_cross_m must be positive, got {lambda_along_m}/{lambda_cross_m}"
+        )
+    if not sources:
+        return 0.0
+    lats = np.array([s.lat for s in sources])
+    lons = np.array([s.lon for s in sources])
+    # Displacement source → receptor in the receptor-centred local frame:
+    # latlon_to_local_xy returns source positions relative to the
+    # receptor, so negate to get the source→receptor vector.
+    sx, sy = latlon_to_local_xy(lats, lons, receptor.lat, receptor.lon)
+    dx, dy = -sx, -sy
+    phi = math.radians(bearing_deg)
+    along = dx * math.sin(phi) + dy * math.cos(phi)
+    cross = dx * math.cos(phi) - dy * math.sin(phi)
+    rates = np.array([s.emission_rate_g_s for s in sources])
+    w = np.exp(
+        -np.maximum(along, 0.0) / lambda_along_m
+        - (np.abs(cross) + np.maximum(-along, 0.0)) / lambda_cross_m
+    )
+    return float(np.sum(rates * w))
+
+
 def _parse(ts: str) -> datetime | None:
     try:
         return datetime.fromisoformat(ts)

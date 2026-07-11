@@ -48,6 +48,10 @@ class EmissionDrivers:
     is_night: bool
     border_flow_m3s: float | None = None
     precipitation_mm: float = 0.0
+    # Tide tendency d(tide)/dt in m/h, computed across the hourly series
+    # by the caller (a single row can't know it). Negative = ebb. Default
+    # 0.0 keeps every tide-ebb term inert (back-compatible).
+    tide_rate_m_h: float = 0.0
 
     @classmethod
     def from_dataframe_row(cls, row: Any, ts_col: str = "time") -> EmissionDrivers:
@@ -114,6 +118,15 @@ class EmissionParameters:
     # Keyed by source name. Sources not in this dict get 0.0.
     baselines_g_s: dict[str, float] = field(default_factory=dict)
 
+    # Tide-ebb culvert enhancement (2026-07-11, Saturn Blvd mechanism):
+    # a culvert ponds the river and its downstream drop is submerged at
+    # high water; as the tide falls the drop re-exposes and the ponded
+    # volume drains over it (turbulent aeration -> H2S stripping). Model:
+    # f_ebb = 1 + a_ebb * max(0, -d(tide)/dt), applied only to sources in
+    # ebb_source_names. a_ebb = 0 (default) disables the term entirely.
+    a_ebb: float = 0.0
+    ebb_source_names: tuple[str, ...] = ()
+
 
 # ---------- Parametric functions ---------- #
 
@@ -173,6 +186,18 @@ def f_diel(driver: EmissionDrivers, params: EmissionParameters) -> float:
     return 1.0 + 0.5 * (params.diel_amplitude - 1.0) * (1.0 + math.cos(angle))
 
 
+def f_tide_ebb(driver: EmissionDrivers, params: EmissionParameters) -> float:
+    """Culvert-drop enhancement on the falling tide.
+
+    ``1 + a_ebb * max(0, -tide_rate_m_h)`` — inert on rising/slack water
+    and whenever ``a_ebb`` is 0. The derivative form is self-lagging:
+    the enhancement peaks mid-ebb, and the stagnation box's residence
+    time supplies the additional transport lag (the observed NESTOR
+    signal trails the tide by ~2-3 h).
+    """
+    return 1.0 + params.a_ebb * max(0.0, -driver.tide_rate_m_h)
+
+
 # ---------- Model ---------- #
 
 
@@ -214,6 +239,11 @@ class EmissionsModel:
             * f_substrate(driver, self.params)
             * f_volatilization(driver, self.params, location.archetype)
             * f_diel(driver, self.params)
+            * (
+                f_tide_ebb(driver, self.params)
+                if location.name in self.params.ebb_source_names
+                else 1.0
+            )
         )
 
     def compute_sources(

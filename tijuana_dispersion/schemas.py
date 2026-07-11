@@ -77,6 +77,14 @@ class StagnationBoxSpec(BaseModel):
     lambda_m: float | None = Field(default=None, gt=0.0)
     tau_h: float = Field(default=3.0, gt=0.0)
     area_m2: float = Field(default=4.0e6, gt=0.0)
+    # Drainage-flow variant (Saturn Blvd mechanism, 2026-07-11): when set,
+    # the kernel becomes directional — receptors accumulate sources
+    # *upstream* along the drainage bearing (direction the flow moves
+    # toward, CW from north; Tijuana valley ≈ 280°) with lambda_m as the
+    # along-valley decay and lambda_cross_m as the short cross-valley /
+    # counter-drainage decay. Requires lambda_m.
+    drainage_bearing_deg: float | None = Field(default=None, ge=0.0, lt=360.0)
+    lambda_cross_m: float = Field(default=500.0, gt=0.0)
 
 
 class ForwardRunRequest(BaseModel):

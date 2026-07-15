@@ -136,8 +136,23 @@ def _box_array(
     return backend.run_forward(sources, receptors, met, units=req.units)
 
 
+def _cache_disabled() -> bool:
+    """Kill switch for the request cache (DISPERSION_DISABLE_CACHE=1).
+
+    Calibration workloads make millions of UNIQUE requests (every SMC
+    particle proposes new parameters), so the cache never hits but writes
+    a JSON file per request — measured 2.5 GB / 640k files in 18 minutes
+    per MCMC chain pod (2026-07-14), which fills the pod's ephemeral-
+    storage limit in ~5 h and gets it evicted. Long-running fitting
+    processes must disable it; interactive/service use keeps it on.
+    """
+    return os.environ.get("DISPERSION_DISABLE_CACHE", "").strip().lower() in ("1", "true", "yes")
+
+
 def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
     """Execute a forward dispersion request."""
+    if _cache_disabled():
+        return _run_forward_uncached(req)
     cache_id = req.cache_key or _hash_request(req)
     cache_path = CACHE_DIR / f"forward_{cache_id}.json"
 
@@ -146,6 +161,13 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
         cached["cached"] = True
         return ForwardRunResult(**cached)
 
+    result = _run_forward_uncached(req)
+    cache_path.write_text(result.model_dump_json())
+    return result
+
+
+def _run_forward_uncached(req: ForwardRunRequest) -> ForwardRunResult:
+    """The actual forward computation, no cache read or write."""
     if req.backend == "hysplit":
         # Stub — would shell out to containerized HYSPLIT here
         raise NotImplementedError(
@@ -208,7 +230,7 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
         "emission_driver": bool(req.emission_driver),
     }
 
-    result = ForwardRunResult(
+    return ForwardRunResult(
         backend=req.backend,
         n_times=len(met),
         n_receptors=len(receptors),
@@ -222,8 +244,6 @@ def run_forward(req: ForwardRunRequest) -> ForwardRunResult:
         stagnation_flags=stagnation_flags,
         out_of_envelope=out_of_envelope,
     )
-    cache_path.write_text(result.model_dump_json())
-    return result
 
 
 def run_inversion(req: InversionRequest) -> InversionResult:

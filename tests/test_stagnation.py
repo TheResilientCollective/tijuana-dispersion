@@ -30,6 +30,7 @@ from tijuana_dispersion import (
     StagnationBoxBackend,
     StagnationBoxSpec,
     run_forward,
+    service,
 )
 from tijuana_dispersion.schemas import SCHEMA_VERSION
 from tijuana_dispersion.stagnation import (
@@ -407,3 +408,16 @@ def test_request_drainage_spec_dispatch() -> None:
     )
     arr = np.asarray(run_forward(req).concentrations)
     assert arr[0, 0] > 3.0 * arr[0, 1]  # NESTOR >> SY on the stagnation hour
+
+
+def test_cache_kill_switch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DISPERSION_DISABLE_CACHE=1 computes without reading or writing cache."""
+    met_specs = [_ms("2026-03-14T02:00:00-08:00", 1.0, night=True)]
+    req = _req(met_specs)
+    monkeypatch.setenv("DISPERSION_DISABLE_CACHE", "1")
+    before = sorted(service.CACHE_DIR.glob("forward_*.json"))
+    r1 = run_forward(req)
+    assert sorted(service.CACHE_DIR.glob("forward_*.json")) == before  # nothing written
+    monkeypatch.delenv("DISPERSION_DISABLE_CACHE")
+    r2 = run_forward(req)  # cached path, same physics
+    assert np.allclose(np.asarray(r1.concentrations), np.asarray(r2.concentrations))

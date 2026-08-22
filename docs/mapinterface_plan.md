@@ -19,14 +19,14 @@ inventory below was verified against the live MinIO endpoint on 2026-08-22 (see
 | Question | Decision |
 |---|---|
 | Where does the app live? | A new standalone repo, `tijuana-map`. Not in this repo — `AGENTS.md` rule 4 makes the deploy surface (`Dockerfile`, `railway.json`) human-approval-only, and a Node/TS build does not belong in a Python service image. Not in `resilient_workflows_public` either — the pipelines should not gate a front-end deploy. |
-| Where does the browser read data from? | Directly from the **`resilient-public`** bucket on `https://oss.resilientservice.mooo.com`. No API server in the read path. |
+| Where does the browser read data from? | Directly from the **`resilientpublic`** bucket on `https://oss.resilientservice.mooo.com`. No API server in the read path. |
 | UI stack | **MapLibre GL JS + deck.gl**, in a React + Vite + TypeScript shell. Details and rationale in §3. |
 
 ---
 
 ## 2. Data inventory
 
-Endpoint: `https://oss.resilientservice.mooo.com/resilient-public/<key>`
+Endpoint: `https://oss.resilientservice.mooo.com/resilientpublic/<key>`
 
 The object layout is set in code by `resilient_core.utils.store_assets`. Assets
 written with `enable_latest_path=True` also land under a mirrored
@@ -184,14 +184,30 @@ arrows.
 These are additions to `resilient_workflows_public` (the `tijuana` code
 location), not to this repo.
 
-**A. Public read access on `resilient-public`.** *Blocking.* An anonymous
-`GET https://oss.resilientservice.mooo.com/resilient-public/<key>` currently
-returns `AccessDenied`. The map's entire design assumes static reads from this
-bucket. Needed: a read-only anonymous policy on the `tijuana/*` and
-`latest/tijuana/*` prefixes (or a dedicated `web/*` prefix, see B), and a CORS
-configuration matching what the `test` bucket already has (`*` origin,
-`Content-Range` exposed for range reads). Until this is done, the front end
-cannot fetch anything.
+**A. Point the pipelines at `resilientpublic`.** *Blocking, but not a
+permissions problem.* The bucket is already configured exactly as the map needs:
+anonymous `GET` and `ListObjectsV2` both succeed, `Access-Control-Allow-Origin: *`
+is set, and `Content-Range` is exposed so range reads (PMTiles, parquet) work from
+the browser. **It is empty — zero objects.** Meanwhile the pipelines are actively
+writing to the `test` bucket; `tijuana/forecast_data/output/modeldata_h2s_nofill.*`
+was written there at 2026-08-22 17:48 UTC, during the writing of this plan.
+
+So the fix is a destination change, not an access change. The bucket comes from
+the `S3_BUCKET` / `PUBLIC_BUCKET` environment variables consumed by
+`resilient_core.resources.minio` (`workflows/.env.example` ships `S3_BUCKET=test`,
+`PUBLIC_BUCKET=test`). Either:
+
+- set the production deployment's `S3_BUCKET` to `resilientpublic` and let the
+  scheduled assets republish — cleanest, and it makes the public bucket the
+  system of record for published outputs; or
+- keep pipelines writing to `test` and mirror only the prefixes the map needs
+  (`latest/tijuana/*`, the `web/*` bundles from B) into `resilientpublic` on a
+  schedule — smaller blast radius, but adds a copy step that can silently lag.
+
+Whichever is chosen, everything the map reads must land in `resilientpublic`,
+because that is the only bucket the public can read. Note the `test` bucket's
+current anonymous readability should probably be revisited once this moves —
+a dev/staging target being world-readable is not obviously intended.
 
 **B. A `web/` prefix of map-ready bundles.** The analysis outputs are shaped for
 modelling, not for a phone. A small set of derived assets, each rewritten in
@@ -227,27 +243,30 @@ hundred KB total, and `BitmapLayer` consumes PNGs natively. Alternatively a
 quantised binary array. Either way, the current file must not be fetched by a
 browser.
 
-**E. Freshness of the near-real-time feeds.** In the publicly readable `test`
-bucket, `hs2_current.geojson` was last written 2026-04-28 and
+**E. Freshness of the near-real-time feeds.** In the `test` bucket that the
+pipelines currently write to, `hs2_current.geojson` was last written 2026-04-28 and
 `effluent_flow/output/effluent_flow_today/…` returns 404, while
 `forecast_data/*` is current to 2026-08-16 and `astronomical_day/*` to
-2026-08-22. That bucket may simply be a stale dev target — but before the map
-goes live, confirm on `resilient-public` that the hourly APCD schedule and the
-`effluent_flow_today` asset are actually running and writing there. A map that
+2026-08-22. Since `forecast_data` in that same bucket is
+current to today, the bucket itself is live — so these particular schedules look
+stalled rather than misdirected. Before the map goes live, confirm the hourly APCD
+schedule and the `effluent_flow_today` asset are actually running. A map that
 silently shows April's H₂S reading is worse than no map. Every panel should
 render its own `dateModified` (available in the sidecar `.metadata.json`) and
 grey itself out past a staleness threshold.
 
-**F. Ocean model freshness.** Scripps PFM outputs in the readable bucket stop at
-2026-04/05. Same check as E.
+**F. Ocean model freshness.** Scripps PFM outputs stop at 2026-04/05. Same check
+as E.
 
 ---
 
 ## 6. Phased delivery
 
-**Phase 0 — unblock (pipelines / infra).** A + E + F above: public read policy on
-`resilient-public`, and confirmation that the hourly feeds are live there. Until
-this is settled the front end can only be built against fixtures.
+**Phase 0 — unblock (pipelines / infra).** A + E + F above: publish to
+`resilientpublic`, and get the stalled hourly feeds running again. Until this is
+settled the front end can only be built against fixtures. Nothing here requires
+new infrastructure — the bucket is provisioned and correctly permissioned, it
+just has nothing in it.
 
 **Phase 1 — the static map.** New `tijuana-map` repo: Vite + React + TS,
 MapLibre with a PMTiles basemap of the valley, three H₂S station pins coloured by
@@ -301,13 +320,16 @@ the calm-night regime where the plume model has no skill.
 
 Checked live on 2026-08-22 against `https://oss.resilientservice.mooo.com`:
 
-- The `test` bucket is anonymously readable and listable, with
-  `Access-Control-Allow-Origin: *` and `Content-Range` exposed. Object layout,
-  file sizes, schemas and column names quoted above were read from it.
-- The `resilient-public` bucket returns `AccessDenied` to anonymous `GET` — hence
-  §5 A. Its key layout is assumed identical, since both are written by the same
-  `store_assets` code paths, but the specific sizes and freshness dates above
-  were measured on `test` and must be re-checked on `resilient-public`.
+- **`resilientpublic`** — anonymous `GET` and `ListObjectsV2` both return 200,
+  `Access-Control-Allow-Origin: *`, `Content-Range` exposed. **Contains zero
+  objects.** (A hyphenated `resilient-public` also exists on the endpoint and
+  returns `AccessDenied`; it is not the bucket.)
+- **`test`** — where the pipelines currently write, also anonymously readable and
+  listable. Every object layout, file size, schema and column name quoted above
+  was read from it, because it is the only place the data exists right now. Keys
+  are generated by the same `store_assets` code paths regardless of bucket, so
+  the layout carries over unchanged; the freshness dates do not, and must be
+  re-checked once publishing moves.
 - Schemas quoted (`h2s_peaks`, `forecast_15min`, `effluent_flow_2026`,
   `hs2_current.geojson`, `forward_grid_frames_latest.json`) are from the actual
   bytes of those objects, not inferred from code.

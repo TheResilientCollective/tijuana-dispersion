@@ -1,0 +1,16 @@
+{
+  "version": 8,
+  "name": "Tijuana River Valley — offline",
+  "sources": {
+    "streams": { "type": "geojson", "data": "./basemap/streams-valley.geojson" }
+  },
+  "layers": [
+    { "id": "bg", "type": "background", "paint": { "background-color": "#eef0ea" } },
+    {
+      "id": "streams-line",
+      "type": "line",
+      "source": "streams",
+      "paint": { "line-color": "#5b8fb9", "line-width": 1.4, "line-opacity": 0.85 }
+    }
+  ]
+}

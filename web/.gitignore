@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.local
+.DS_Store
+
+# Mirrored fixtures — regenerate with ./scripts/mirror-fixtures.sh
+public/data/
+public/basemap/streams-valley.geojson
+tsconfig.tsbuildinfo

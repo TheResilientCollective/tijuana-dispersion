@@ -1,0 +1,31 @@
+{
+  "name": "tijuana-map",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Public map of H2S conditions in the Tijuana River Valley",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.3.10",
+    "@deck.gl/layers": "^9.3.10",
+    "@deck.gl/mapbox": "^9.3.10",
+    "hyparquet": "^1.17.1",
+    "hyparquet-compressors": "^1.1.1",
+    "maplibre-gl": "^5.9.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "uplot": "^1.6.32"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  }
+}

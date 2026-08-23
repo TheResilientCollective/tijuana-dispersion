@@ -27,17 +27,14 @@ static host. `npm run typecheck` runs the TypeScript project check.
 
 ## Which bucket
 
-`resilientpublic` is the public bucket and the intended source — it is
-anonymously readable and listable, sends `Access-Control-Allow-Origin: *`, and
-exposes `Content-Range` so parquet range reads work from the browser.
+`resilentpublic` — note the spelling, it is missing the second `i` and is not a
+typo to correct. It is anonymously readable and listable, sends
+`Access-Control-Allow-Origin: *`, exposes `Content-Range` so parquet range reads
+work from the browser, and is written continuously by the pipelines.
 
-**It is empty today.** The pipelines still publish to the `test` bucket. Until
-that is repointed (section 5 A of the plan), override the default to see real
-data:
-
-```
-VITE_DATA_BASE=https://oss.resilientservice.mooo.com/test
-```
+Two similarly-named buckets on the same endpoint are decoys and will make the
+monitoring network look dead: `resilientpublic` (correctly spelled, empty) and
+`test` (a partial copy whose H₂S feeds stopped in April 2026).
 
 ### Working offline
 

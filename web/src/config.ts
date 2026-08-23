@@ -1,14 +1,16 @@
 /** Runtime configuration. Everything the map reads is a static object-store key. */
 
 /**
- * `resilientpublic` is the public bucket: anonymously readable and listable,
- * CORS open, Content-Range exposed. It is also empty at the time of writing —
- * the pipelines still publish to `test`. Until that moves, set VITE_DATA_BASE
- * to the `test` bucket to see real data. See docs/mapinterface_plan.md §5 A in
- * the tijuana-dispersion repo.
+ * `resilentpublic` is the production bucket — note the spelling, it is missing
+ * the second `i` and is not a typo to fix. Anonymously readable and listable,
+ * CORS open, Content-Range exposed for parquet range reads.
+ *
+ * Two similarly-named buckets on the same endpoint are decoys: `resilientpublic`
+ * (correctly spelled, empty) and `test` (a partial copy whose H2S feeds stopped
+ * in April 2026). Reading either will make the monitoring network look dead.
  */
 export const DATA_BASE: string = (
-  import.meta.env.VITE_DATA_BASE ?? 'https://oss.resilientservice.mooo.com/resilientpublic'
+  import.meta.env.VITE_DATA_BASE ?? 'https://oss.resilientservice.mooo.com/resilentpublic'
 ).replace(/\/$/, '')
 
 export const BASEMAP_STYLE: string =

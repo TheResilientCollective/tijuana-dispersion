@@ -8,9 +8,9 @@ Valley who want to know *what am I smelling, how bad is it, and why*. Secondary
 audience: reporters and agency staff who want the same picture with numbers
 attached.
 
-Status: **plan only**. Nothing in this document has been built yet. The data
-inventory below was verified against the live MinIO endpoint on 2026-08-22 (see
-*Verification notes* for what was checked against which bucket).
+Status: phases 1, 2 and 4 are built (see the `web/` directory in this repo);
+phase 3 is under way. The data inventory below was verified against the live
+MinIO endpoint on 2026-08-23 (see *Verification notes*).
 
 ---
 
@@ -19,14 +19,14 @@ inventory below was verified against the live MinIO endpoint on 2026-08-22 (see
 | Question | Decision |
 |---|---|
 | Where does the app live? | A new standalone repo, `tijuana-map`. Not in this repo — `AGENTS.md` rule 4 makes the deploy surface (`Dockerfile`, `railway.json`) human-approval-only, and a Node/TS build does not belong in a Python service image. Not in `resilient_workflows_public` either — the pipelines should not gate a front-end deploy. |
-| Where does the browser read data from? | Directly from the **`resilientpublic`** bucket on `https://oss.resilientservice.mooo.com`. No API server in the read path. |
+| Where does the browser read data from? | Directly from the **`resilentpublic`** bucket on `https://oss.resilientservice.mooo.com` — note the spelling, it is missing the second `i` and is not a typo to be corrected. No API server in the read path. |
 | UI stack | **MapLibre GL JS + deck.gl**, in a React + Vite + TypeScript shell. Details and rationale in §3. |
 
 ---
 
 ## 2. Data inventory
 
-Endpoint: `https://oss.resilientservice.mooo.com/resilientpublic/<key>`
+Endpoint: `https://oss.resilientservice.mooo.com/resilentpublic/<key>`
 
 The object layout is set in code by `resilient_core.utils.store_assets`. Assets
 written with `enable_latest_path=True` also land under a mirrored
@@ -59,9 +59,9 @@ near-certain above 50 ppb.
 
 | Layer | Key | Format / size | Notes |
 |---|---|---|---|
-| H₂S time series (slider + plot) | `latest/tijuana/forecast_data/modeldata_h2s.parquet` | parquet, 2.6 MB | hourly, all stations, already joined to weather, streamflow and tide. The single best backing table for the slider. |
+| H₂S time series (slider + plot) | `latest/tijuana/forecast_data/modeldata_h2s.parquet` (or `_nofill`) | parquet, 6.9 MB | hourly, all stations, to 2026-08-21, already joined to weather, streamflow and tide. The single best backing table for the slider — but see section 5 B, it is a modelling table and the map should be reading a trimmed web bundle instead. |
 | H₂S last 24 h at 15-min | `latest/tijuana/forecast_data/modeldata_h2s_15min_24hour.parquet` | parquet, 31 KB | ideal for the "today" default view |
-| Raw H₂S history | `latest/tijuana/sd_apcd_air/h2s_all/h2s_all.parquet` | parquet, 136 KB | full record; CSV twin is 4.2 MB, use parquet |
+| Raw H₂S history | `latest/tijuana/sd_apcd_air/h2s_all/h2s_all.parquet` | parquet, 288 KB | **last written 2026-04-06 and its rows stop in Dec 2025** — unlike the rest of the bucket this one really is stale, so use `modeldata_*` for anything recent |
 | Wind vectors over time | `latest/tijuana/weather_15min/<site>/forecast_15min.csv` and `latest/tijuana/weather/<site>/<year>.parquet` | | 3 point locations only — see §4 for the field question |
 | Channel flow (border → estuary) | `latest/tijuana/streamflow/boundary_cms/…`, `latest/tijuana/streamflow/canal_cms/…` (IBWC gauge 11013300 and the Tijuana Canal) | CSV/parquet | hourly discharge |
 | Plant effluent | as §2.1 | | daily only |
@@ -70,7 +70,7 @@ near-certain above 50 ppb.
 
 ### 2.3 Long-term view (7 / 30 / 90 day)
 
-`latest/tijuana/forecast_data/h2s_peaks.parquet` — **21 KB**, and it is exactly
+`latest/tijuana/forecast_data/h2s_peaks.parquet` — **39 KB**, and it is exactly
 the requested statistic:
 
 ```
@@ -80,7 +80,7 @@ total_measurements, max_h2s, mean_h2s, count_filled
 
 One row per station per day per day/night period, back to Dec 2024. "Hours over
 5 ppb and 30 ppb for an evening at Nestor" is a filter on this file, and the
-7/30/90-day window selector is a client-side slice of a 21 KB download. No new
+7/30/90-day window selector is a client-side slice of a 39 KB download. No new
 pipeline work is needed for the long-term view.
 
 Companion datasets, if the long-term view grows: `h2s_exceedance_model_data_5ppb`
@@ -184,30 +184,12 @@ arrows.
 These are additions to `resilient_workflows_public` (the `tijuana` code
 location), not to this repo.
 
-**A. Point the pipelines at `resilientpublic`.** *Blocking, but not a
-permissions problem.* The bucket is already configured exactly as the map needs:
-anonymous `GET` and `ListObjectsV2` both succeed, `Access-Control-Allow-Origin: *`
-is set, and `Content-Range` is exposed so range reads (PMTiles, parquet) work from
-the browser. **It is empty — zero objects.** Meanwhile the pipelines are actively
-writing to the `test` bucket; `tijuana/forecast_data/output/modeldata_h2s_nofill.*`
-was written there at 2026-08-22 17:48 UTC, during the writing of this plan.
-
-So the fix is a destination change, not an access change. The bucket comes from
-the `S3_BUCKET` / `PUBLIC_BUCKET` environment variables consumed by
-`resilient_core.resources.minio` (`workflows/.env.example` ships `S3_BUCKET=test`,
-`PUBLIC_BUCKET=test`). Either:
-
-- set the production deployment's `S3_BUCKET` to `resilientpublic` and let the
-  scheduled assets republish — cleanest, and it makes the public bucket the
-  system of record for published outputs; or
-- keep pipelines writing to `test` and mirror only the prefixes the map needs
-  (`latest/tijuana/*`, the `web/*` bundles from B) into `resilientpublic` on a
-  schedule — smaller blast radius, but adds a copy step that can silently lag.
-
-Whichever is chosen, everything the map reads must land in `resilientpublic`,
-because that is the only bucket the public can read. Note the `test` bucket's
-current anonymous readability should probably be revisited once this moves —
-a dev/staging target being world-readable is not obviously intended.
+**A. Public read access.** *Resolved — nothing to do.* `resilentpublic` is
+already exactly what the map needs: anonymous `GET` and `ListObjectsV2` both
+succeed, `Access-Control-Allow-Origin: *` is set, `Content-Range` is exposed so
+parquet and PMTiles range reads work from the browser, and it holds 63,382 live
+objects written continuously by the pipelines. No policy change, no mirroring
+step, no API proxy.
 
 **B. A `web/` prefix of map-ready bundles.** The analysis outputs are shaped for
 modelling, not for a phone. A small set of derived assets, each rewritten in
@@ -216,7 +198,9 @@ place on a schedule:
 - `web/tijuana/current.json` — one object with current H₂S per station, temp,
   humidity, wind, latest effluent flow, and a `generated_at` stamp. One request
   paints the whole static view.
-- `web/tijuana/h2s_7day.json` — 7 days × 3 stations, hourly, ~50 KB.
+- `web/tijuana/h2s_7day.json` — 7 days × 3 stations, hourly, ~50 KB. This one
+  now matters more than it did: the map currently downloads the full 6.9 MB
+  `modeldata` parquet to render one week of it.
 - `web/tijuana/wind_grid_7day.json` — the u/v grid from §4.2.
 - `web/tijuana/channel_flow_7day.json` — see C.
 - `web/tijuana/exceedance_90day.json` — a slice of `h2s_peaks`.
@@ -243,30 +227,28 @@ hundred KB total, and `BitmapLayer` consumes PNGs natively. Alternatively a
 quantised binary array. Either way, the current file must not be fetched by a
 browser.
 
-**E. Freshness of the near-real-time feeds.** In the `test` bucket that the
-pipelines currently write to, `hs2_current.geojson` was last written 2026-04-28 and
-`effluent_flow/output/effluent_flow_today/…` returns 404, while
-`forecast_data/*` is current to 2026-08-16 and `astronomical_day/*` to
-2026-08-22. Since `forecast_data` in that same bucket is
-current to today, the bucket itself is live — so these particular schedules look
-stalled rather than misdirected. Before the map goes live, confirm the hourly APCD
-schedule and the `effluent_flow_today` asset are actually running. A map that
-silently shows April's H₂S reading is worse than no map. Every panel should
-render its own `dateModified` (available in the sidecar `.metadata.json`) and
-grey itself out past a staleness threshold.
+**E. `effluent_flow_today` does not publish.** The only genuine data gap. The
+asset exists in `ibwc_flows.py` and fetches SBIWTP's *Today* endpoint, but
+nothing lands under `tijuana/effluent_flow/output/effluent_flow_today/` — the
+only prefixes present are `effluent_flow_current_year/` and
+`effluent_flow_yearly/`. So plant discharge is available daily, not hourly, and
+the map's "right now" discharge figure is really "yesterday's daily total".
+Either fix the asset or label the panel as a daily value; the map currently does
+the latter.
 
-**F. Ocean model freshness.** Scripps PFM outputs stop at 2026-04/05. Same check
-as E.
+**F. Publish freshness on the page, not just in the pipeline.** Every feed is
+current (see *Verification notes*), but an object's write time is not the same
+as the age of the observation inside it, and the two can diverge silently when a
+scraper starts returning stale rows. The front end reads the observation
+timestamp on every panel and flags anything older than three hours. Keep that
+behaviour rather than assuming currency.
 
 ---
 
 ## 6. Phased delivery
 
-**Phase 0 — unblock (pipelines / infra).** A + E + F above: publish to
-`resilientpublic`, and get the stalled hourly feeds running again. Until this is
-settled the front end can only be built against fixtures. Nothing here requires
-new infrastructure — the bucket is provisioned and correctly permissioned, it
-just has nothing in it.
+**Phase 0 — unblock.** *Not needed.* The bucket is public, CORS-open and full of
+current data. The front end was built straight against it.
 
 **Phase 1 — the static map.** New `tijuana-map` repo: Vite + React + TS,
 MapLibre with a PMTiles basemap of the valley, three H₂S station pins coloured by
@@ -288,7 +270,7 @@ valley rather than a dashboard.
 
 **Phase 4 — long-term view.** The 7/30/90-day selector over `h2s_peaks`: hours
 over 5 ppb and over 30 ppb per station per evening, as a calendar heatmap plus
-per-station bars. Cheap (21 KB of data) and it is the view that shows the scale
+per-station bars. Cheap (39 KB of data) and it is the view that shows the scale
 of the burden — 22.8 % of days since Jan 2024 above 30 ppb somewhere in the
 network.
 
@@ -318,18 +300,24 @@ the calm-night regime where the plume model has no skill.
 
 ## Verification notes
 
-Checked live on 2026-08-22 against `https://oss.resilientservice.mooo.com`:
+Checked live on 2026-08-23 against `https://oss.resilientservice.mooo.com`:
 
-- **`resilientpublic`** — anonymous `GET` and `ListObjectsV2` both return 200,
-  `Access-Control-Allow-Origin: *`, `Content-Range` exposed. **Contains zero
-  objects.** (A hyphenated `resilient-public` also exists on the endpoint and
-  returns `AccessDenied`; it is not the bucket.)
-- **`test`** — where the pipelines currently write, also anonymously readable and
-  listable. Every object layout, file size, schema and column name quoted above
-  was read from it, because it is the only place the data exists right now. Keys
-  are generated by the same `store_assets` code paths regardless of bucket, so
-  the layout carries over unchanged; the freshness dates do not, and must be
-  re-checked once publishing moves.
-- Schemas quoted (`h2s_peaks`, `forecast_15min`, `effluent_flow_2026`,
-  `hs2_current.geojson`, `forward_grid_frames_latest.json`) are from the actual
-  bytes of those objects, not inferred from code.
+- **`resilentpublic`** is the production bucket — 63,382 objects, written
+  continuously (the newest at 04:00 UTC on the day of checking). Anonymous `GET`
+  and `ListObjectsV2` both return 200, `Access-Control-Allow-Origin: *`,
+  `Content-Range` exposed. Every key, size, schema and column name quoted above
+  was read from it.
+- Content, not just object timestamps, is current: `hs2_current.geojson` carried
+  readings stamped 19:00 the previous evening (Nestor 1.0 ppb, IB 1.0, San
+  Ysidro 0.4, all green); `modeldata_h2s_nofill.parquet` runs to 2026-08-21 with
+  53,260 rows; `h2s_peaks.parquet` to 2026-08-21 with 3,908 rows.
+- `tijuana/effluent_flow/output/effluent_flow_today/` does not exist; only the
+  current-year and yearly prefixes do. This is the one real gap (section 5 E).
+- Two similarly-named buckets on the same endpoint are **not** the source and
+  caused a wrong reading of this system in an earlier draft of this document:
+  `resilientpublic` (correctly spelled, publicly listable, **empty**) and `test`
+  (publicly listable, holds a partial copy whose H2S feeds stopped in April
+  2026). An earlier version of this plan drew its inventory from `test` and
+  concluded the monitoring feeds had stalled. They had not. If a dataset here
+  looks months old, check which bucket is being read before concluding anything
+  about the pipelines.

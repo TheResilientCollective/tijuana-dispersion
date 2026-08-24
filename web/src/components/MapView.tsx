@@ -5,7 +5,8 @@ import { IconLayer, ScatterplotLayer, TextLayer, GeoJsonLayer } from '@deck.gl/l
 import { BASEMAP_STYLE, INITIAL_VIEW, STATIONS, type Station } from '../config'
 import { rgbaFor, type Level } from '../lib/h2s'
 import type { GeoJson } from '../lib/fetchers'
-import type { Strings } from '../lib/i18n'
+import type { Lang, Strings } from '../lib/i18n'
+import { compassPoint, glyphAngle, windGlyph } from '../lib/wind'
 
 /** What the map draws at the currently selected instant. */
 export interface MapPoint {
@@ -22,37 +23,10 @@ interface Props {
   showWind: boolean
   showOcean: boolean
   strings: Strings
+  lang: Lang
 }
 
-/**
- * A single arrow, drawn once into a canvas and reused as a deck.gl icon atlas.
- *
- * deck.gl rotates the sprite per-datum, so one texture serves every station and
- * every timestep. Drawing it here rather than shipping a PNG keeps the app free
- * of binary assets and makes the arrow's proportions easy to tune.
- */
-function arrowIcon(): string {
-  const size = 128
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return ''
-  ctx.fillStyle = '#1c3f6e'
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-  ctx.lineWidth = 5
-  ctx.beginPath()
-  ctx.moveTo(size / 2, 8)              // tip
-  ctx.lineTo(size - 24, size - 20)     // right barb
-  ctx.lineTo(size / 2, size - 44)      // notch
-  ctx.lineTo(24, size - 20)            // left barb
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
-  return canvas.toDataURL()
-}
-
-export function MapView({ points, ocean, showWind, showOcean, strings }: Props) {
+export function MapView({ points, ocean, showWind, showOcean, strings, lang }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const overlayRef = useRef<MapboxOverlay | null>(null)
@@ -76,7 +50,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings }: Props) 
 
     mapRef.current = map
     overlayRef.current = overlay
-    iconRef.current = arrowIcon()
+    iconRef.current = windGlyph()
 
     return () => {
       overlay.finalize()
@@ -160,9 +134,10 @@ export function MapView({ points, ocean, showWind, showOcean, strings }: Props) 
                 anchorY: 64,
                 mask: false,
               }),
-              // Meteorological convention: direction is where the wind comes
-              // FROM, so the arrow points 180 degrees away, downwind.
-              getAngle: (d) => -((d.windDirDeg ?? 0) + 180),
+              // The glyph's head points downwind and its tail bar sits on the
+              // upwind side, so the reader does not have to know which
+              // convention is in play. See lib/wind.ts.
+              getAngle: (d) => glyphAngle(d.windDirDeg),
               // Scale with speed so a calm night reads as calm at a glance.
               getSize: (d) => 22 + Math.min(28, (d.windSpeedKmh ?? 0) * 1.2),
               sizeUnits: 'pixels',
@@ -171,6 +146,30 @@ export function MapView({ points, ocean, showWind, showOcean, strings }: Props) 
               updateTriggers: {
                 getAngle: withWind.map((p) => p.windDirDeg).join(','),
                 getSize: withWind.map((p) => p.windSpeedKmh).join(','),
+              },
+            })
+          : null,
+
+        // The direction in words, because an arrow alone is ambiguous to anyone
+        // who assumes the opposite convention — and reading it backwards here
+        // means mistaking which way an odour plume is heading.
+        showWind
+          ? new TextLayer<MapPoint>({
+              id: 'wind-labels',
+              data: withWind,
+              getPosition: (d) => [d.station.lon, d.station.lat],
+              getText: (d) => `${strings.windFrom} ${compassPoint(d.windDirDeg, lang)}`,
+              getSize: 11,
+              getColor: [28, 63, 110, 255],
+              getPixelOffset: [0, 68],
+              fontWeight: 600,
+              outlineWidth: 4,
+              outlineColor: [255, 255, 255, 255],
+              fontSettings: { sdf: true },
+              background: false,
+              pickable: false,
+              updateTriggers: {
+                getText: withWind.map((p) => p.windDirDeg).join(',') + lang,
               },
             })
           : null,
@@ -186,7 +185,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings }: Props) 
             }
           : null,
     })
-  }, [points, ocean, showWind, showOcean, strings])
+  }, [points, ocean, showWind, showOcean, strings, lang])
 
   return <div className="map" ref={containerRef} aria-label={STATIONS.map((s) => s.label).join(', ')} />
 }

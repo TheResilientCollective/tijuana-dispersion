@@ -136,6 +136,7 @@ export default function App() {
               showWind={showWind}
               showOcean={showOcean}
               strings={strings}
+              lang={lang}
             />
           </Suspense>
 
@@ -230,6 +231,7 @@ export default function App() {
                 </li>
               ))}
             </ul>
+            <p className="note">{strings.windLegend}</p>
             <h2>{strings.aboutTitle}</h2>
             <p className="note">{strings.about}</p>
             <p className="note">

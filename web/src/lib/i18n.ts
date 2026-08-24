@@ -40,6 +40,8 @@ export interface Strings {
   layers: string
   layerStations: string
   layerWind: string
+  windFrom: string
+  windLegend: string
   layerOcean: string
   whatThisMeans: string
   guidance: Record<'green' | 'yellow' | 'orange' | 'purple' | 'white', string>
@@ -86,6 +88,9 @@ export const STRINGS: Record<Lang, Strings> = {
     layerStations: 'Monitoring stations',
     layerWind: 'Wind',
     layerOcean: 'Ocean plume forecast',
+    windFrom: 'from',
+    windLegend:
+      'The wind arrow points the way the air is moving; the bar sits on the side the wind comes from. The label repeats it in words.',
     whatThisMeans: 'What the numbers mean',
     guidance: {
       green: 'Below 5 ppb. Odour is possible but usually faint.',
@@ -136,6 +141,9 @@ export const STRINGS: Record<Lang, Strings> = {
     layerStations: 'Estaciones de monitoreo',
     layerWind: 'Viento',
     layerOcean: 'Pronóstico de pluma oceánica',
+    windFrom: 'del',
+    windLegend:
+      'La flecha del viento apunta hacia donde se mueve el aire; la barra marca el lado del que viene el viento. La etiqueta lo repite en palabras.',
     whatThisMeans: 'Qué significan las cifras',
     guidance: {
       green: 'Menos de 5 ppb. Puede haber olor, generalmente leve.',

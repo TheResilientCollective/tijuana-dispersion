@@ -2,17 +2,10 @@ import { STALE_AFTER_HOURS } from '../config'
 import { colorFor } from '../lib/h2s'
 import type { EffluentRow, StationReading, WeatherRow } from '../lib/fetchers'
 import { freshness } from '../lib/time'
+import { compassPoint, kmhToMph } from '../lib/wind'
 import type { Lang, Strings } from '../lib/i18n'
 import { FreshnessLine } from './Freshness'
 
-const compass = (deg: number | null): string => {
-  if (deg == null) return '—'
-  const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-                'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
-  return dirs[Math.round(((deg % 360) / 22.5)) % 16]
-}
-
-const kmhToMph = (kmh: number | null): number | null => (kmh == null ? null : kmh * 0.621371)
 const cToF = (c: number | null): number | null => (c == null ? null : c * 9 / 5 + 32)
 
 export function CurrentConditions({
@@ -76,7 +69,7 @@ export function CurrentConditions({
           <dd>
             {weather?.windSpeedKmh == null
               ? '—'
-              : `${kmhToMph(weather.windSpeedKmh)!.toFixed(0)} mph ${compass(weather.windDirDeg)}`}
+              : `${strings.windFrom} ${compassPoint(weather.windDirDeg, lang)} ${kmhToMph(weather.windSpeedKmh)!.toFixed(0)} mph`}
           </dd>
         </div>
         <div>

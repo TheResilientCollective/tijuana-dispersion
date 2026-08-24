@@ -65,6 +65,12 @@ body {
 .side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 
 .map {
+  /* deck.gl's overlay canvas is `position: absolute; left: 0; top: 0`. Without a
+     positioned ancestor that resolves against the viewport, not this container,
+     so every deck layer renders translated by the container's page offset —
+     station pins land in the ocean, and the error grows as the centred page
+     gets wider. This line is what keeps the overlay registered to the basemap. */
+  position: relative;
   height: clamp(320px, 52vh, 560px);
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   background: var(--card);

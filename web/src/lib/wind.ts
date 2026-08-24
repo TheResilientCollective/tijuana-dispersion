@@ -9,7 +9,7 @@
  *     is travelling.
  *
  * A reader who assumes the other convention reads every arrow backwards, which
- * on this page means mistaking where an odour plume is heading. So the map does
+ * on this page means mistaking where an odor plume is heading. So the map does
  * not rely on the reader knowing which convention is in play: the glyph carries
  * a tail on the upwind side and a head on the downwind side, and the direction
  * is also spelled out in words next to it.

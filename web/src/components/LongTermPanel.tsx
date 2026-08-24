@@ -105,30 +105,41 @@ export function LongTermPanel({ peaks, strings }: { peaks: PeakRow[]; strings: S
                   </span>
                 </div>
                 <div className="bars" aria-hidden="true">
-                  {s.bars.map((b) => (
-                    <span
-                      key={b.t}
-                      className={b.recorded ? 'bar' : 'bar bar-missing'}
-                      title={`${formatLocal(new Date(b.t), { hour: undefined, minute: undefined })}: ${
-                        b.recorded ? `${b.over5} h > 5 ppb, ${b.over30} h > 30 ppb` : 'no record'
-                      }`}
-                    >
+                  {s.bars.map((b) => {
+                    // `count_exceeds_5` counts every hour above 5 ppb, the ones
+                    // above 30 included, so the two are stacked rather than
+                    // overlaid: the milder 5-30 band at the base and the severe
+                    // hours on top of it. Total height stays hours above 5.
+                    const severe = b.over30
+                    const mild = Math.max(0, b.over5 - severe)
+                    const pct = (hours: number) => (hours / maxBar) * 100
+                    // A single hour must still be visible on a 46 px strip.
+                    const floor = (hours: number, h: number) => (hours > 0 ? Math.max(6, h) : 0)
+                    const mildH = floor(mild, pct(mild))
+                    const severeH = floor(severe, pct(severe))
+                    return (
                       <span
-                        className="bar-fill"
-                        style={{
-                          height: `${Math.max(b.over5 > 0 ? 6 : 0, (b.over5 / maxBar) * 100)}%`,
-                          background: BANDS[1].color,
-                        }}
-                      />
-                      <span
-                        className="bar-fill bar-over"
-                        style={{
-                          height: `${Math.max(b.over30 > 0 ? 6 : 0, (b.over30 / maxBar) * 100)}%`,
-                          background: BANDS[2].color,
-                        }}
-                      />
-                    </span>
-                  ))}
+                        key={b.t}
+                        className={b.recorded ? 'bar' : 'bar bar-missing'}
+                        title={`${formatLocal(new Date(b.t), { hour: undefined, minute: undefined })}: ${
+                          b.recorded ? `${b.over5} h > 5 ppb, of which ${severe} h > 30 ppb` : 'no record'
+                        }`}
+                      >
+                        <span
+                          className="bar-fill"
+                          style={{ height: `${mildH}%`, background: BANDS[1].color }}
+                        />
+                        <span
+                          className="bar-fill bar-severe"
+                          style={{
+                            height: `${severeH}%`,
+                            bottom: `${mildH}%`,
+                            background: BANDS[2].color,
+                          }}
+                        />
+                      </span>
+                    )
+                  })}
                 </div>
                 {s.daysRecorded === 0 && <p className="freshness">{strings.noData}</p>}
               </li>

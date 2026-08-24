@@ -64,15 +64,15 @@ export const STRINGS: Record<Lang, Strings> = {
     wind: 'Wind',
     effluent: 'Treatment plant discharge',
     effluentNote:
-      'Plant discharge, not river flow. When the plant treats less, more sewage reaches the river and odour tends to rise.',
+      'Plant discharge, not river flow. When the plant treats less, more sewage reaches the river and odor tends to rise.',
     sevenDay: 'The last 7 days',
     sevenDayNote: 'Drag the slider to move the map and the chart through the week.',
     windowRange: 'Showing',
     windowHistoric:
       'This is the most recent week of data published, not the week just gone — the monitoring feed is behind.',
-    longTerm: 'Hours above the odour thresholds',
+    longTerm: 'Hours above the odor thresholds',
     longTermNote:
-      'Hours per evening above 5 ppb (odour likely) and 30 ppb (strong odour) at each station.',
+      'Hours per evening above 5 ppb (odor likely) and 30 ppb (strong odor) at each station.',
     window7: '7 days',
     window30: '30 days',
     window90: '90 days',
@@ -98,8 +98,8 @@ export const STRINGS: Record<Lang, Strings> = {
       'The wind arrow points the way the air is moving; the bar sits on the side the wind comes from. The label repeats it in words.',
     whatThisMeans: 'What the numbers mean',
     guidance: {
-      green: 'Below 5 ppb. Odour is possible but usually faint.',
-      yellow: '5–30 ppb. Odour is likely and can be unpleasant.',
+      green: 'Below 5 ppb. Odor is possible but usually faint.',
+      yellow: '5–30 ppb. Odor is likely and can be unpleasant.',
       orange: 'Above 30 ppb. Strong odor; APCD reports levels via text and email.',
       purple: 'Extremely high. Follow any guidance from public health authorities.',
       white: 'No reading available from this station.',

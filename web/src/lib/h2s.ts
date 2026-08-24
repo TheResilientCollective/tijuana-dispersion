@@ -7,7 +7,7 @@
  * rest of the system, so the thresholds live here in one place and the server's
  * `level` string is treated as authoritative when present.
  *
- * Odour-likelihood wording is drawn from the threshold analysis in
+ * Odor-likelihood wording is drawn from the threshold analysis in
  * docs/project_context.md: complaints begin near 2 ppb, cross 50% likelihood at
  * 8-10 ppb, and are near-certain above 50 ppb.
  */

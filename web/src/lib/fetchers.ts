@@ -171,7 +171,7 @@ export interface EffluentRow {
  * SBIWTP plant effluent, daily, in million US gallons per day.
  *
  * This is plant discharge, not channel flow. Low plant throughput means more
- * sewage reaching the river, which is why it belongs on a page about odour —
+ * sewage reaching the river, which is why it belongs on a page about odor —
  * see finding 1 in docs/project_context.md (r = -0.47 at Nestor, 1-day lag).
  */
 export async function fetchEffluent(): Promise<EffluentRow[]> {

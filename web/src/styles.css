@@ -161,8 +161,9 @@ body {
   45deg, transparent, transparent 2px,
   color-mix(in srgb, var(--line) 80%, transparent) 2px,
   color-mix(in srgb, var(--line) 80%, transparent) 4px); }
-.bar-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 1px 1px 0 0; }
-.bar-over { opacity: 0.95; }
+.bar-fill { position: absolute; bottom: 0; left: 0; right: 0; }
+/* The severe segment sits on top of the milder one, so only it gets the cap. */
+.bar-severe { border-radius: 1px 1px 0 0; }
 
 .legend { list-style: none; margin: 0 0 0.5rem; padding: 0; display: grid; gap: 0.5rem; font-size: 0.87rem; }
 .legend li { display: flex; gap: 0.6rem; align-items: flex-start; }

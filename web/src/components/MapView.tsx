@@ -202,7 +202,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
 
         // The direction in words, because an arrow alone is ambiguous to anyone
         // who assumes the opposite convention — and reading it backwards here
-        // means mistaking which way an odour plume is heading.
+        // means mistaking which way an odor plume is heading.
         showWind
           ? new TextLayer<MapPoint>({
               id: 'wind-labels',

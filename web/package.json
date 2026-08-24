@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "start": "serve --no-clipboard --listen ${PORT:-3000} dist",
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "maplibre-gl": "^5.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "serve": "^14.2.6",
     "uplot": "^1.6.32"
   },
   "devDependencies": {

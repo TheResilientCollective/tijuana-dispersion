@@ -47,6 +47,38 @@ VITE_BASEMAP_STYLE=./basemap/offline-style.json npm run dev
 The script also clips the basin hydrography into a minimal MapLibre style, so
 the UI can be developed and reviewed with no third-party tile requests.
 
+## Deploying to Railway
+
+`railway.json` here configures the map as its **own Railway service**, separate
+from the dispersion API. Both configs live in the `tijuana-dispersion` repo, so
+the service must be told which one to use:
+
+> **Set the service's Root Directory to `web`.** Without it Railway reads the
+> repo-root `railway.json` and tries to build the FastAPI Dockerfile instead.
+
+With that set, Railway runs `npm ci && npm run build`, then serves `dist/` on
+`$PORT`. The healthcheck hits `/`.
+
+```
+railway link                 # pick the project
+railway up                   # from this directory
+```
+
+### The data URL is baked in at build time
+
+Vite inlines `VITE_DATA_BASE` into the bundle when it builds, so it must be set
+as a Railway **build** variable, and changing it needs a redeploy — restarting
+the service will not pick up a new value. The default in `src/config.ts` already
+points at the production bucket, so the variable is only needed to override it.
+
+### Why a Node process for static files
+
+Railway serves over HTTP, so something has to listen on `$PORT`; `serve` is that
+something and nothing more. Note it is *not* run with `--single`: this app has no
+client-side router, so every URL it serves is a real file, and an SPA fallback
+would answer a missing asset with `index.html` and a 200 instead of a 404 —
+turning a clear failure into a confusing MIME error in the browser.
+
 ## What it shows
 
 | Panel | Source |

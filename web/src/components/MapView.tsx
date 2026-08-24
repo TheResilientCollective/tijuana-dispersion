@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import { IconLayer, ScatterplotLayer, TextLayer, GeoJsonLayer } from '@deck.gl/layers'
-import { BASEMAP_STYLE, INITIAL_VIEW, STATIONS, type Station } from '../config'
+
+import { BASEMAP_STYLE, INITIAL_VIEW, SBIWTP, STATIONS, type Station } from '../config'
 import { rgbaFor, type Level } from '../lib/h2s'
 import type { GeoJson } from '../lib/fetchers'
 import type { Lang, Strings } from '../lib/i18n'
@@ -19,8 +20,16 @@ export interface MapPoint {
   stableAtm: number | null
 }
 
+/** Current treated flow leaving the plant, with the day it was measured. */
+export interface PlantReading {
+  mgd: number | null
+  observedAt: Date | null
+}
+
 interface Props {
   points: MapPoint[]
+  plant: PlantReading | null
+  showPlant: boolean
   ocean: GeoJson | null
   showWind: boolean
   showOcean: boolean
@@ -28,12 +37,61 @@ interface Props {
   lang: Lang
 }
 
-export function MapView({ points, ocean, showWind, showOcean, strings, lang }: Props) {
+/**
+ * The treatment-plant marker.
+ *
+ * A square, not a circle: the round pins on this map are H2S readings coloured
+ * by concentration band, and a plant is not a reading. Keeping the shape and
+ * the palette distinct stops it being read as a fourth monitoring station.
+ */
+function plantGlyph(): string {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+
+  const x = 30
+  const w = size - 60
+  const r = 10
+  const box = () => {
+    ctx.beginPath()
+    ctx.moveTo(x + r, x)
+    ctx.arcTo(x + w, x, x + w, x + w, r)
+    ctx.arcTo(x + w, x + w, x, x + w, r)
+    ctx.arcTo(x, x + w, x, x, r)
+    ctx.arcTo(x, x, x + w, x, r)
+    ctx.closePath()
+  }
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+  ctx.lineWidth = 16
+  box()
+  ctx.stroke()
+
+  ctx.fillStyle = '#37474f'
+  box()
+  ctx.fill()
+
+  // A gap through the middle reads as a works/facility rather than a solid pin.
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 8
+  ctx.beginPath()
+  ctx.moveTo(x + 12, x + w / 2)
+  ctx.lineTo(x + w - 12, x + w / 2)
+  ctx.stroke()
+
+  return canvas.toDataURL()
+}
+
+export function MapView({ points, plant, ocean, showWind, showOcean, showPlant, strings, lang }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const overlayRef = useRef<MapboxOverlay | null>(null)
   const iconRef = useRef<string>('')
   const calmRef = useRef<string>('')
+  const plantRef = useRef<string>('')
 
   // Create the map once. Layer data changes go through the deck.gl overlay.
   useEffect(() => {
@@ -55,6 +113,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
     overlayRef.current = overlay
     iconRef.current = windGlyph()
     calmRef.current = calmGlyph()
+    plantRef.current = plantGlyph()
 
     return () => {
       overlay.finalize()
@@ -87,6 +146,52 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
               getLineWidth: 12,
               lineWidthMinPixels: 1,
               pointRadiusMinPixels: 3,
+            })
+          : null,
+
+        showPlant && plant && plantRef.current
+          ? new IconLayer<PlantReading>({
+              id: 'plant',
+              data: [plant],
+              getPosition: () => [SBIWTP.lon, SBIWTP.lat],
+              getIcon: () => ({
+                url: plantRef.current,
+                width: 128,
+                height: 128,
+                anchorX: 64,
+                anchorY: 64,
+                mask: false,
+              }),
+              getSize: 26,
+              sizeUnits: 'pixels',
+              pickable: true,
+            })
+          : null,
+
+        showPlant && plant
+          ? new TextLayer<PlantReading>({
+              id: 'plant-label',
+              data: [plant],
+              getPosition: () => [SBIWTP.lon, SBIWTP.lat],
+              getText: (d) =>
+                d.mgd == null
+                  ? SBIWTP.label
+                  : `${SBIWTP.label} · ${d.mgd.toFixed(1)} MGD`,
+              getSize: 12,
+              getColor: [55, 71, 79, 255],
+              // Left of the marker: the San Ysidro monitor is 1.8 km north-east
+              // and its pin, calm ring and wind text fill the space above and
+              // below. Centring this label would put it under that cluster.
+              getTextAnchor: 'end',
+              getPixelOffset: [-18, 0],
+              fontWeight: 700,
+              outlineWidth: 4,
+              outlineColor: [255, 255, 255, 255],
+              fontSettings: { sdf: true },
+              characterSet: 'auto',
+              background: false,
+              pickable: false,
+              updateTriggers: { getText: plant.mgd },
             })
           : null,
 
@@ -226,17 +331,33 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
           : null,
       ].filter(Boolean) as never[],
 
-      getTooltip: ({ object }: { object?: MapPoint }) =>
-        object
-          ? {
-              html: `<strong>${object.station.label}</strong><br/>${
-                object.ppb == null ? strings.noData : `${object.ppb.toFixed(1)} ${strings.ppb}`
-              }`,
-              style: { fontSize: '0.85rem', padding: '6px 8px' },
-            }
-          : null,
+      getTooltip: ({ object }: { object?: MapPoint | PlantReading }) => {
+        if (!object) return null
+        const style = { fontSize: '0.85rem', padding: '6px 8px', maxWidth: '260px' }
+        if ('station' in object) {
+          return {
+            html: `<strong>${object.station.label}</strong><br/>${
+              object.ppb == null ? strings.noData : `${object.ppb.toFixed(1)} ${strings.ppb}`
+            }`,
+            style,
+          }
+        }
+        // The plant reading runs days behind the monitors, so the tooltip
+        // carries its own date rather than borrowing the map's cursor.
+        const when = object.observedAt
+          ? new Intl.DateTimeFormat(lang === 'es' ? 'es-US' : 'en-US', {
+              timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric',
+            }).format(object.observedAt)
+          : '—'
+        return {
+          html: `<strong>${strings.plantName}</strong><br/>${
+            object.mgd == null ? strings.noData : `${object.mgd.toFixed(1)} MGD · ${when}`
+          }<br/><span style="opacity:.8">${strings.plantTooltip}</span>`,
+          style,
+        }
+      },
     })
-  }, [points, ocean, showWind, showOcean, strings, lang])
+  }, [points, plant, ocean, showWind, showOcean, showPlant, strings, lang])
 
   return <div className="map" ref={containerRef} aria-label={STATIONS.map((s) => s.label).join(', ')} />
 }

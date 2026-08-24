@@ -7,7 +7,7 @@ import {
 import { levelFor } from './lib/h2s'
 import { formatLocal, nearestByTime } from './lib/time'
 import { STRINGS, type Lang } from './lib/i18n'
-import type { MapPoint } from './components/MapView'
+import type { MapPoint, PlantReading } from './components/MapView'
 
 /** deck.gl and MapLibre are most of the bundle. Loading them after first paint
  *  lets the readings — the part a resident actually came for — render first. */
@@ -59,6 +59,7 @@ export default function App() {
 
   const [showWind, setShowWind] = useState(true)
   const [showOcean, setShowOcean] = useState(false)
+  const [showPlant, setShowPlant] = useState(true)
 
   /**
    * The 7-day window ends at the last hour actually present in the data, not at
@@ -118,6 +119,10 @@ export default function App() {
 
   const latestEffluent = effluent.data.length ? effluent.data[effluent.data.length - 1] : null
 
+  const plantReading: PlantReading | null = latestEffluent
+    ? { mgd: latestEffluent.mgd, observedAt: latestEffluent.time }
+    : null
+
   return (
     <div className="app">
       <header className="header">
@@ -138,6 +143,8 @@ export default function App() {
           <Suspense fallback={<div className="map map-loading">{strings.loading}</div>}>
             <MapView
               points={points}
+              plant={plantReading}
+              showPlant={showPlant}
               ocean={ocean.data.hazard}
               showWind={showWind}
               showOcean={showOcean}
@@ -152,6 +159,11 @@ export default function App() {
               <label>
                 <input type="checkbox" checked={showWind} onChange={(e) => setShowWind(e.target.checked)} />
                 {strings.layerWind}
+              </label>
+              <label>
+                <input type="checkbox" checked={showPlant}
+                       onChange={(e) => setShowPlant(e.target.checked)} />
+                {strings.layerPlant}
               </label>
               <label>
                 <input type="checkbox" checked={showOcean}

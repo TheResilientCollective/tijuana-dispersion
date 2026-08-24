@@ -66,6 +66,22 @@ export const STATIONS: Station[] = [
 export const stationByApcdName = (name: string): Station | undefined =>
   STATIONS.find((s) => s.apcdName === name.trim())
 
+/**
+ * The South Bay International Wastewater Treatment Plant.
+ *
+ * Coordinates are the centroid of the OpenStreetMap relation named "South Bay
+ * International Wastewater Treatment Plant" (`man_made=wastewater_plant`),
+ * retrieved via Overpass. Nominatim's text search does not return this feature
+ * under any name, so it has to come from a tag query. Sanity checks: 0.40 km
+ * from Stewart's Drain, 1.81 km from the San Ysidro monitor, 2.21 km from the
+ * Tijuana River border crossing — the valley just north of the border.
+ */
+export const SBIWTP = {
+  label: 'SBIWTP',
+  lat: 32.5421725,
+  lon: -117.0619085,
+} as const
+
 /** Map view over the valley, the estuary and the border crossings. */
 export const INITIAL_VIEW = { longitude: -117.09, latitude: 32.5655, zoom: 11.6 }
 

@@ -45,6 +45,9 @@ export interface Strings {
   windCalmLegend: string
   windLegend: string
   layerOcean: string
+  layerPlant: string
+  plantName: string
+  plantTooltip: string
   whatThisMeans: string
   guidance: Record<'green' | 'yellow' | 'orange' | 'purple' | 'white', string>
   aboutTitle: string
@@ -90,6 +93,10 @@ export const STRINGS: Record<Lang, Strings> = {
     layerStations: 'Monitoring stations',
     layerWind: 'Wind',
     layerOcean: 'Ocean plume forecast',
+    layerPlant: 'Treatment plant',
+    plantName: 'South Bay International Wastewater Treatment Plant',
+    plantTooltip:
+      'Treated flow leaving the plant, in millions of gallons a day. When this falls, more sewage reaches the river and odor tends to rise.',
     windFrom: 'from',
     windCalm: 'calm — air is pooling',
     windCalmLegend:
@@ -146,6 +153,10 @@ export const STRINGS: Record<Lang, Strings> = {
     layerStations: 'Estaciones de monitoreo',
     layerWind: 'Viento',
     layerOcean: 'Pronóstico de pluma oceánica',
+    layerPlant: 'Planta de tratamiento',
+    plantName: 'Planta Internacional de Tratamiento de Aguas Residuales South Bay',
+    plantTooltip:
+      'Caudal tratado que sale de la planta, en millones de galones por día. Cuando baja, más aguas negras llegan al río y el olor suele aumentar.',
     windFrom: 'del',
     windCalm: 'en calma — el aire se estanca',
     windCalmLegend:

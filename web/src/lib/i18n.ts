@@ -100,7 +100,7 @@ export const STRINGS: Record<Lang, Strings> = {
     guidance: {
       green: 'Below 5 ppb. Odour is possible but usually faint.',
       yellow: '5–30 ppb. Odour is likely and can be unpleasant.',
-      orange: 'Above 30 ppb. Strong odour; headaches and nausea are commonly reported.',
+      orange: 'Above 30 ppb. Strong odor; APCD reports levels via text and email.',
       purple: 'Extremely high. Follow any guidance from public health authorities.',
       white: 'No reading available from this station.',
     },
@@ -156,7 +156,7 @@ export const STRINGS: Record<Lang, Strings> = {
     guidance: {
       green: 'Menos de 5 ppb. Puede haber olor, generalmente leve.',
       yellow: '5–30 ppb. Es probable que haya olor y puede ser desagradable.',
-      orange: 'Más de 30 ppb. Olor fuerte; se reportan dolores de cabeza y náuseas.',
+      orange: 'Más de 30 ppb. Olor fuerte; APCD informa los niveles por mensaje de texto y correo electrónico.',
       purple: 'Extremadamente alto. Siga las indicaciones de las autoridades de salud.',
       white: 'No hay lectura disponible en esta estación.',
     },

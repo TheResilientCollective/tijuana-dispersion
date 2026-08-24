@@ -17,6 +17,34 @@
 
 import type { Lang } from './i18n'
 
+/**
+ * Wind speed below which a direction arrow over-states what is known.
+ *
+ * Measured on the published record at Nestor: hours above 5 ppb are below this
+ * speed 41% of the time, and hours above 30 ppb 55% of the time, against 8% for
+ * clean hours. Under this the air is barely moving and the modelled bearing is
+ * close to arbitrary.
+ */
+export const CALM_KMH = 3
+
+/**
+ * Is this hour one where a direction arrow would mislead?
+ *
+ * The model data carries `stable_atm`, and it is the stronger signal: at Nestor,
+ * stable hours average 17.8 ppb against 3.5 for unstable ones, and carry a 38%
+ * chance of exceeding 5 ppb against 12%. Those are the calm, stratified nights
+ * when H2S pools rather than travelling — the same regime the dispersion
+ * service's `regime.is_stagnation()` flags as having no plume skill. Where the
+ * flag is absent, fall back to the speed threshold.
+ */
+export function isStagnant(
+  stableAtm: number | null | undefined,
+  windSpeedKmh: number | null | undefined,
+): boolean {
+  if (stableAtm === 1) return true
+  return windSpeedKmh != null && windSpeedKmh < CALM_KMH
+}
+
 const POINTS_EN = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                    'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
 
@@ -102,6 +130,51 @@ export function windGlyph(): string {
   ctx.beginPath(); head(); ctx.stroke()
   ctx.fillStyle = fill
   ctx.beginPath(); head(); ctx.fill()
+
+  return canvas.toDataURL()
+}
+
+
+/**
+ * The calm/stagnation marker: a ring, not an arrow.
+ *
+ * Drawn when the air is stratified or barely moving. A ring has no direction,
+ * which is the point — it says "pooling here" rather than asserting a transport
+ * bearing the conditions do not support. This is the regime that produces the
+ * worst H2S episodes, so it needs to read as a warning, not as missing data.
+ */
+export function calmGlyph(): string {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+
+  const mid = size / 2
+
+  // White halo first so the ring survives any basemap underneath.
+  ctx.lineCap = 'round'
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+  ctx.lineWidth = 20
+  ctx.beginPath()
+  ctx.arc(mid, mid, 36, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // A dashed ring reads as "unsettled" rather than as a solid boundary.
+  ctx.strokeStyle = '#1c3f6e'
+  ctx.lineWidth = 10
+  ctx.setLineDash([14, 10])
+  ctx.beginPath()
+  ctx.arc(mid, mid, 36, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  // A dot at the centre keeps it legible when scaled down on a phone.
+  ctx.fillStyle = '#1c3f6e'
+  ctx.beginPath()
+  ctx.arc(mid, mid, 7, 0, Math.PI * 2)
+  ctx.fill()
 
   return canvas.toDataURL()
 }

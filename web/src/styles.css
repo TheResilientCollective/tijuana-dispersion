@@ -114,9 +114,15 @@ body {
 .metrics dt { font-size: 0.8rem; color: var(--ink-soft); }
 .metrics dd { margin: 0; font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.slider-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+.slider-head { display: flex; justify-content: flex-end; margin-bottom: 0.15rem; }
+.slider-head output {
+  font-size: 0.85rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* The input's left/right margins are set from the chart's measured plotting
+   area, so the handle sits directly above the moment it selects. */
+.slider-row { display: flex; margin-bottom: 0.4rem; }
 .slider-row input[type='range'] { flex: 1; accent-color: var(--accent); min-width: 0; }
-.slider-row output { font-size: 0.85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .chart { width: 100%; }
 

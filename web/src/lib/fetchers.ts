@@ -206,6 +206,8 @@ export interface SeriesRow {
   windDirDeg: number | null
   sbiwtpMgd: number | null
   borderFlowCms: number | null
+  /** 1 when the model classes the hour as stably stratified. See lib/wind.ts. */
+  stableAtm: number | null
 }
 
 /**
@@ -219,6 +221,7 @@ export async function fetchSeries(): Promise<SeriesRow[]> {
   const raw = await getParquet(KEYS.modelData, [
     'time', 'site_name', 'H2S', 'temperature_2m', 'relative_humidity_2m',
     'wind_speed_10m', 'wind_direction_10m', 'sbiwtp_flow_mgd', 'Flow (m^3/s)--Border',
+    'stable_atm',
   ])
   return raw
     .map((r): SeriesRow | null => {
@@ -236,6 +239,7 @@ export async function fetchSeries(): Promise<SeriesRow[]> {
         windDirDeg: num(r.wind_direction_10m),
         sbiwtpMgd: num(r.sbiwtp_flow_mgd),
         borderFlowCms: num(r['Flow (m^3/s)--Border']),
+        stableAtm: num(r.stable_atm),
       }
     })
     .filter((r): r is SeriesRow => r !== null)

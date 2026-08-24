@@ -15,21 +15,32 @@ const SERIES_COLORS = ['#1c3f6e', '#a6572a', '#4b7f52']
  * uPlot rather than a charting framework: this redraws on every slider tick and
  * needs to stay smooth on a mid-range phone.
  */
+/** Insets of the plotting area within the chart, in CSS pixels. */
+export interface PlotGeometry {
+  left: number
+  right: number
+}
+
 export function H2SChart({
   rows,
   cursorTime,
   onScrub,
+  onGeometry,
   strings,
 }: {
   rows: SeriesRow[]
   cursorTime: Date | null
   onScrub?: (t: Date) => void
+  /** Reports where the plotting area sits so the slider can line up with it. */
+  onGeometry?: (g: PlotGeometry) => void
   strings: Strings
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
   const scrubRef = useRef(onScrub)
   scrubRef.current = onScrub
+  const geometryRef = useRef(onGeometry)
+  geometryRef.current = onGeometry
 
   useEffect(() => {
     const host = hostRef.current
@@ -55,6 +66,14 @@ export function H2SChart({
       times.map((t) => t / 1000),
       ...perStation,
     ] as uPlot.AlignedData
+
+    // uPlot reports its plotting box in canvas pixels; the slider needs CSS.
+    const reportGeometry = (u: uPlot) => {
+      const ratio = uPlot.pxRatio || window.devicePixelRatio || 1
+      const left = u.bbox.left / ratio
+      const right = Math.max(0, u.width - (u.bbox.left + u.bbox.width) / ratio)
+      geometryRef.current?.({ left, right })
+    }
 
     const thresholds: uPlot.Plugin = {
       hooks: {
@@ -109,8 +128,13 @@ export function H2SChart({
                   scrubRef.current(new Date((u.data[0][i] as number) * 1000))
                 }
               })
+              reportGeometry(u)
             },
           ],
+          // The axis width depends on the tick labels, so it is only known
+          // after a draw and changes when the data does.
+          setSize: [reportGeometry],
+          draw: [reportGeometry],
         },
       },
       data,

@@ -41,6 +41,8 @@ export interface Strings {
   layerStations: string
   layerWind: string
   windFrom: string
+  windCalm: string
+  windCalmLegend: string
   windLegend: string
   layerOcean: string
   whatThisMeans: string
@@ -89,6 +91,9 @@ export const STRINGS: Record<Lang, Strings> = {
     layerWind: 'Wind',
     layerOcean: 'Ocean plume forecast',
     windFrom: 'from',
+    windCalm: 'calm — air is pooling',
+    windCalmLegend:
+      'A dashed ring replaces the arrow when the air is still or stratified. There is no useful wind direction then, and it is exactly when H₂S builds up instead of blowing away.',
     windLegend:
       'The wind arrow points the way the air is moving; the bar sits on the side the wind comes from. The label repeats it in words.',
     whatThisMeans: 'What the numbers mean',
@@ -142,6 +147,9 @@ export const STRINGS: Record<Lang, Strings> = {
     layerWind: 'Viento',
     layerOcean: 'Pronóstico de pluma oceánica',
     windFrom: 'del',
+    windCalm: 'en calma — el aire se estanca',
+    windCalmLegend:
+      'Un círculo punteado reemplaza la flecha cuando el aire está quieto o estratificado. En ese caso no hay una dirección útil del viento, y es justo cuando el H₂S se acumula en vez de dispersarse.',
     windLegend:
       'La flecha del viento apunta hacia donde se mueve el aire; la barra marca el lado del que viene el viento. La etiqueta lo repite en palabras.',
     whatThisMeans: 'Qué significan las cifras',

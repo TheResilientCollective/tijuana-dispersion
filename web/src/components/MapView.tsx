@@ -6,7 +6,7 @@ import { BASEMAP_STYLE, INITIAL_VIEW, STATIONS, type Station } from '../config'
 import { rgbaFor, type Level } from '../lib/h2s'
 import type { GeoJson } from '../lib/fetchers'
 import type { Lang, Strings } from '../lib/i18n'
-import { compassPoint, glyphAngle, windGlyph } from '../lib/wind'
+import { calmGlyph, compassPoint, glyphAngle, isStagnant, windGlyph } from '../lib/wind'
 
 /** What the map draws at the currently selected instant. */
 export interface MapPoint {
@@ -15,6 +15,8 @@ export interface MapPoint {
   level: Level
   windSpeedKmh: number | null
   windDirDeg: number | null
+  /** 1 when the model classes the hour as stably stratified. */
+  stableAtm: number | null
 }
 
 interface Props {
@@ -31,6 +33,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
   const mapRef = useRef<MapLibreMap | null>(null)
   const overlayRef = useRef<MapboxOverlay | null>(null)
   const iconRef = useRef<string>('')
+  const calmRef = useRef<string>('')
 
   // Create the map once. Layer data changes go through the deck.gl overlay.
   useEffect(() => {
@@ -51,6 +54,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
     mapRef.current = map
     overlayRef.current = overlay
     iconRef.current = windGlyph()
+    calmRef.current = calmGlyph()
 
     return () => {
       overlay.finalize()
@@ -64,7 +68,11 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
     const overlay = overlayRef.current
     if (!overlay) return
 
-    const withWind = points.filter((p) => p.windDirDeg != null && p.windSpeedKmh != null)
+    const hasWind = points.filter((p) => p.windDirDeg != null && p.windSpeedKmh != null)
+    // A direction arrow on a stagnant night asserts transport that is not
+    // happening. Those stations get a ring instead. See lib/wind.ts.
+    const withWind = hasWind.filter((p) => !isStagnant(p.stableAtm, p.windSpeedKmh))
+    const stagnant = hasWind.filter((p) => isStagnant(p.stableAtm, p.windSpeedKmh))
 
     overlay.setProps({
       layers: [
@@ -117,6 +125,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
           outlineWidth: 4,
           outlineColor: [255, 255, 255, 255],
           fontSettings: { sdf: true },
+              characterSet: 'auto',
           background: false,
           pickable: false,
         }),
@@ -150,6 +159,47 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
             })
           : null,
 
+        showWind && calmRef.current
+          ? new IconLayer<MapPoint>({
+              id: 'wind-calm',
+              data: stagnant,
+              getPosition: (d) => [d.station.lon, d.station.lat],
+              getIcon: () => ({
+                url: calmRef.current,
+                width: 128,
+                height: 128,
+                anchorX: 64,
+                anchorY: 64,
+                mask: false,
+              }),
+              getSize: 34,
+              sizeUnits: 'pixels',
+              getPixelOffset: [0, 30],
+              pickable: false,
+              updateTriggers: { getPosition: stagnant.map((p) => p.station.slug).join(',') },
+            })
+          : null,
+
+        showWind
+          ? new TextLayer<MapPoint>({
+              id: 'wind-calm-labels',
+              data: stagnant,
+              getPosition: (d) => [d.station.lon, d.station.lat],
+              getText: () => strings.windCalm,
+              getSize: 11,
+              getColor: [28, 63, 110, 255],
+              getPixelOffset: [0, 68],
+              fontWeight: 600,
+              outlineWidth: 4,
+              outlineColor: [255, 255, 255, 255],
+              fontSettings: { sdf: true },
+              characterSet: 'auto',
+              background: false,
+              pickable: false,
+              updateTriggers: { getText: strings.windCalm },
+            })
+          : null,
+
         // The direction in words, because an arrow alone is ambiguous to anyone
         // who assumes the opposite convention — and reading it backwards here
         // means mistaking which way an odour plume is heading.
@@ -166,6 +216,7 @@ export function MapView({ points, ocean, showWind, showOcean, strings, lang }: P
               outlineWidth: 4,
               outlineColor: [255, 255, 255, 255],
               fontSettings: { sdf: true },
+              characterSet: 'auto',
               background: false,
               pickable: false,
               updateTriggers: {

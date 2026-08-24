@@ -15,7 +15,7 @@ const MapView = lazy(() =>
   import('./components/MapView').then((m) => ({ default: m.MapView })),
 )
 import { CurrentConditions } from './components/CurrentConditions'
-import { H2SChart } from './components/H2SChart'
+import { H2SChart, type PlotGeometry } from './components/H2SChart'
 import { LongTermPanel } from './components/LongTermPanel'
 import { DATA_BASE } from './config'
 
@@ -51,6 +51,11 @@ export default function App() {
   const ocean = useAsync<{ hazard: GeoJson | null; sites: GeoJson | null }>(
     fetchOceanLayers, { hazard: null, sites: null },
   )
+
+  // The slider is lined up with the chart's plotting area so the handle sits
+  // directly above the moment it selects; the y-axis inset would otherwise
+  // offset the two by the axis width.
+  const [plotGeometry, setPlotGeometry] = useState<PlotGeometry>({ left: 0, right: 0 })
 
   const [showWind, setShowWind] = useState(true)
   const [showOcean, setShowOcean] = useState(false)
@@ -101,6 +106,7 @@ export default function App() {
         level: scrubbed ? levelFor(ppb) : (live?.level ?? levelFor(ppb)),
         windSpeedKmh: row?.windSpeedKmh ?? w?.windSpeedKmh ?? null,
         windDirDeg: row?.windDirDeg ?? w?.windDirDeg ?? null,
+        stableAtm: row?.stableAtm ?? null,
       }
     })
   }, [cursorTime, cursorIdx, window7, current.data, weather.data])
@@ -181,6 +187,9 @@ export default function App() {
               <p className="freshness stale">{strings.loadError}</p>
             ) : (
               <>
+                <div className="slider-head">
+                  <output>{formatLocal(cursorTime)}</output>
+                </div>
                 <div className="slider-row">
                   <input
                     type="range"
@@ -189,8 +198,11 @@ export default function App() {
                     value={cursorIdx ?? window7.times.length - 1}
                     onChange={(e) => setCursorIdx(Number(e.target.value))}
                     aria-label={strings.sevenDay}
+                    style={{
+                      marginLeft: `${plotGeometry.left}px`,
+                      marginRight: `${plotGeometry.right}px`,
+                    }}
                   />
-                  <output>{formatLocal(cursorTime)}</output>
                 </div>
                 <H2SChart
                   rows={window7.rows}
@@ -199,6 +211,7 @@ export default function App() {
                     const i = window7.times.indexOf(t.getTime())
                     if (i >= 0) setCursorIdx(i)
                   }}
+                  onGeometry={setPlotGeometry}
                   strings={strings}
                 />
               </>
@@ -232,6 +245,7 @@ export default function App() {
               ))}
             </ul>
             <p className="note">{strings.windLegend}</p>
+            <p className="note">{strings.windCalmLegend}</p>
             <h2>{strings.aboutTitle}</h2>
             <p className="note">{strings.about}</p>
             <p className="note">
